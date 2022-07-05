@@ -1,4 +1,4 @@
-import log from '../src/log'
+import log, { create } from '../src/log'
 
 describe('log toggle', () => {
   test('log is enable by default', () => {
@@ -51,41 +51,95 @@ describe('log match', () => {
 })
 
 describe('print', () => {
-  const callback = jest.fn()
-  const print = log.create(callback)
+  const print = log.create()
 
-  print(1)
-  expect(callback).toHaveBeenCalledWith('log', 1)
+  test('print 1', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    print(1)
+    expect(callback).toHaveBeenCalledWith('log', 1)
+    expect(callback).toHaveBeenCalledTimes(1)
+  })
 
-  print.warn(2)
-  expect(callback).toHaveBeenCalledWith('warn', 2)
 
-  print.error(3)
-  expect(callback).toHaveBeenCalledWith('error', 3)
+  test('print 2 by wraning', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    print.warn(2)
+    expect(callback).toHaveBeenCalledWith('warn', 2)
+  })
+
+  test('print 3 by error', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    print.error(3)
+    expect(callback).toHaveBeenCalledWith('error', 3)
+  })
 })
 
 describe('print filter', () => {
-  const callback = jest.fn()
-  const print = log.create(callback)
+  test('filter by predicate function with successful result', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    const print = log.create()
+    let a = 0
+    print.if(() => a % 2 === 0)(a)
+    expect(callback).toHaveBeenCalledWith('log', 0)
+    expect(callback).toHaveBeenCalledTimes(1)
+  })
 
-  let a = 0
-  print.if(() => a % 2 === 0)
-  print(a)
-  expect(callback).toHaveBeenCalledWith('log', 0)
-  expect(callback).toHaveBeenCalledTimes(1)
+  test('filter by predicate function with failed result', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    const print = log.create()
+    let a = 1
+    print.if(() => a % 2 === 0)(a)
+    expect(callback).toHaveBeenCalledTimes(0)
+  })
 
-  a++
-  print(a)
-  expect(callback).toHaveBeenCalledTimes(1)
+  test('filter by predicate expression with sucessful result', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    const print = log.create()
+    let a = 0
+    print.if(true)(a)
+    expect(callback).toHaveBeenCalledWith('log', 0)
+    expect(callback).toHaveBeenCalledTimes(1)
+  })
+
+  test('filter by predicate expression with failed result', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    const print = log.create()
+    let a = 0
+    print.if(false)(a)
+    expect(callback).toHaveBeenCalledTimes(0)
+  })
 })
 
 describe('log with badge', () => {
-  const callback = jest.fn()
-  const print = log.create(callback)
   const badge = 'badge'
+  const print = log.create(badge)
 
-  print.badge(badge)
+  test('badge by create', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    print(badge)
+    expect(callback).toHaveBeenLastCalledWith('log', badge, badge)
+  })
 
-  print(badge)
-  expect(callback).toHaveBeenLastCalledWith('log', badge, badge)
+  test('update basdge with "badge" method', () => {
+    const callback = jest.fn()
+    log.bindCallback(callback)
+    const newBadge = 'newBadge'
+    print.badge(newBadge)
+    print(badge)
+    expect(callback).toHaveBeenLastCalledWith('log', newBadge, badge)
+  })
+})
+
+describe('create alias should be work as expected', () => {
+  const print = create()
+  print(0)
+  expect(true).toBe(true)
 })

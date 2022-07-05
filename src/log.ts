@@ -2,25 +2,24 @@
  * @Author: 阿佑[ayooooo@petalmail.com] 
  * @Date: 2022-07-05 10:19:01 
  * @Last Modified by: 阿佑
- * @Last Modified time: 2022-07-05 15:28:51
+ * @Last Modified time: 2022-07-05 18:57:38
  */
 interface Printer {
   (...args: any[]): void;
   warn (...args: any[]): void;
   error (...args: any[]): void;
   badge (badge: string, style?: string): void;
-  if (pred: () => boolean): void;
+  if (pred: any): (...args: any[]) => void;
 }
 
-function createPrinter (log: Log): Printer {
+function createPrinter (log: Log, name?: string, cssText?: string): Printer {
   const context = log
 
-  let badge = ''
-  let style = ''
-  let pred = () => true
+  let badge = name ?? ''
+  let style = cssText ?? ''
 
   function print (method: 'log' | 'warn' | 'error', ...args: any[]) {
-    if (context.isEnable() && context.isMatch(badge, args.toString()) && pred()) {
+    if (context.isEnable() && context.isMatch(badge, args.toString())) {
       if (badge.trim()) {
         console[method](`%c${badge}`, style, ...args)
         context.report(method, badge, ...args)
@@ -31,24 +30,34 @@ function createPrinter (log: Log): Printer {
     }
   }
 
-  function printer (...args: any[]) {
+  function output (...args: any[]) {
     print('log', ...args)
   }
 
-  printer.warn = (...args: any[]) => print('warn', ...args)
+  output.warn = (...args: any[]) => print('warn', ...args)
 
-  printer.error = (...args: any[]) => print('error', ...args)
+  output.error = (...args: any[]) => print('error', ...args)
 
-  printer.badge = (name: string, cssText = '') => {
+  output.badge = (name: string, cssText = '') => {
     badge = name
-    style = cssText
+
+    if (undefined !== cssText) {
+      style = cssText
+    }
+
+    return output
   }
 
-  printer.if = (predFn: () => boolean) => {
-    pred = predFn
+  output.if = (mix: any) => {
+    return (...args: any[]) => {
+      const result = 'function' === typeof mix ? mix() : Boolean(mix)
+      if (result) {
+        return output(...args)
+      }
+    }
   }
 
-  return printer
+  return output
 }
 
 class Log {
@@ -86,19 +95,21 @@ class Log {
     return this.#badgeParttern.test(badge) && this.#pattern.test(text)
   }
 
-  create (cb?: (...args: any[]) => void) {
-    if ('function' === typeof cb) this.#callback = cb
-
-    return createPrinter(this)
+  create (badge?: string, style?: string) {
+    return createPrinter(this, badge, style)
   }
 
   report (method: string, ...args: any[]) {
     this.#callback?.(method, ...args)
   }
+
+  bindCallback (cb: ((...args: any[]) => void) | null) {
+    this.#callback = cb
+  }
 }
 
 const log = new Log()
 
-export const create = log.create
+export const create = log.create.bind(log)
 
 export default log
