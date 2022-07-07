@@ -14,13 +14,13 @@ export function parseEventName (name: string) {
   }).reduce((a, b) => a.concat(b), [])
 }
 
-export function useEventNames (event: string, use: (name: string, type: string) => void) {
+export function useEventName (event: string, use: (name: string, type: string) => void) {
   parseEventName(event).map(event => {
     if (event.name) use(event.name, event.type)
   })
 }
 
-export type EventHandler = (e: Event, ...dataSet: any[]) => void
+export type EventListener = (e: Event, ...dataSet: any[]) => void
 
 export type EventOptions = AddEventListenerOptions | boolean
 
@@ -33,76 +33,188 @@ export function contextListener (listner: (e: Event, ...dataSet: any[]) => void)
 export type EventRecord = {
   name: string;
   type: string;
-  listener: EventHandler;
-  handler: EventHandler;
+  listener: EventListener;
+  rawListener: EventListener;
   options?: EventOptions;
 }
 
+const DEFAULT_MAX_LISTENERS = 1000
+
 function useEvent (
-  onSub?: (event: string, handler: EventHandler, options?: EventOptions) => void,
-  onRemove?: (event: string, handler: EventHandler, options?: EventOptions) => void,
+  onSub?: (event: string, listener: EventListener, options?: EventOptions) => void,
+  onRemove?: (event: string, listener: EventListener, options?: EventOptions) => void,
   onPub?: (event: string, ...dataSet: any[]) => void,
 ) {
-  const events: EventRecord[] = []
+  const __events: EventRecord[] = []
+  let MAX_LISTENERS = DEFAULT_MAX_LISTENERS
 
-  function on (event: string, handler: EventHandler, options?: EventOptions) {
-    const listener = contextListener(handler)
+  /**
+   * 添加绑定
+   * 事件指定规则 可支持带多个命名空间的多个事件一次性绑定 其中不同的事件之间以空白符分割，不同的命名空间以.分割
+   * 绑定规则
+   *  相同的绑定会替换原有的事件处理器以及事件处理配置项
+   *  新的绑定会添加一条新的绑定记录
+   * 
+   * 相同的绑定是指 name,namespace,listener同时绝对相等则视为相同的绑定
+   * @param event string 'name.namespace1.namespace2 name2.namespace1.namespace2'
+   * @param listener function (e: Event, ...data) => void
+   * @param options boolean | object
+   */
+  function on (event: string, listener: EventListener, options?: EventOptions) {
+    const contextedListener = contextListener(listener)
 
-    useEventNames(event, (name, type) => {
-      for (let j = 0, el = events.length; j < el; j++) {
-        const record = events[j]
-
-        if (record.name === name && record.type === type && record.handler === handler) {
+    useEventName(event, (name, type) => {
+      for (let i = 0, el = __events.length; i < el; i++) {
+        const record = __events[i]
+        /**
+         * 已经绑定过事件，先卸载原来的再绑定新的
+         * 名称相同且命名空间相同且处理函数相同即视为相同的绑定
+         */
+        if (
+          record.name === name &&
+          record.type === type &&
+          record.rawListener === listener
+        ) {
+          // console.log('skip', name, type)
           onRemove?.(record.name, record.listener, record.options)
-          record.listener = listener
+          record.listener = contextedListener
           record.options = options
-          onSub?.(record.name, record.listener, record.options)
+          onSub?.(record.name, contextedListener, options)
           return
         }
       }
 
-      events.push({
+      __events.push({
         name,
         type,
-        listener,
-        handler,
+        listener: contextedListener,
+        rawListener: listener,
         options,
       })
-      onSub?.(name, listener, options)
+
+      onSub?.(name, contextedListener, options)
+
+      if (__events.length >= MAX_LISTENERS) {
+        throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
+      }
     })
   }
 
-  function once (event: string, handler: EventHandler, options?: EventOptions) {
-    on(event, (e: Event, ...dataSet: any[]) => {
-      handler(e, ...dataSet)
+  /**
+   * 一次性绑定即 党所绑定的事件触发之后立即自动解绑
+   * 事件指定规则同on
+   * @param event 
+   * @param listener 
+   * @param options 
+   */
+  function once (event: string, listener: EventListener, options?: EventOptions) {
+    on(event, function handler (e: Event, ...dataSet: any[]) {
+      listener(e, ...dataSet)
       off(event, handler)
     }, options)
   }
 
-  function off (event: string, handler?: EventHandler) {
-    useEventNames(event, (name, type) => {
-      for (var i = 0, j = -1, el = events.length; i < el; i++) {
-        const record = events[i]
-        if (record.name === name && record.type === type && (record.handler === handler || !handler)) {
+  /**
+   * 事件解绑
+   * 事件指定规则同on
+   * 解绑规则
+   *  对可选命名空间和事件处理器若指定则进行绝对相等匹配,若不指定则只进行name匹配
+   * @param event 
+   * @param listener 
+   */
+  function off (event: string, listener?: EventListener) {
+    useEventName(event, (name, type) => {
+      for (var i = 0, j = -1, el = __events.length; i < el; i++) {
+        const record = __events[i]
+        if (
+          record.name === name &&
+          /**
+           * 不指定命名空间，会删除所有name相同的注册事件
+           */
+          (type === '' || record.type === type) &&
+          (!listener || record.rawListener === listener)
+        ) {
           onRemove?.(record.name, record.listener, record.options)
         } else {
-          events[++j] = record
+          __events[++j] = record
         }
       }
 
-      events.length = ++j
+      __events.length = ++j
     })
   }
 
-  function emit (event: string) {
-    onPub?.(event)
+  /**
+   * 事件指定规则同on
+   * 触发匹配规则
+   *  对name和可选的命名空间做绝对相等匹配
+   * @param event 
+   * @param dataSet 
+   */
+  function emit (event: string, ...dataSet: any[]) {
+    useEventName(event, (name, type) => {
+      const e = new CustomEvent(name)
+      for (let i = 0, el = __events.length; i < el; i++) {
+        const record = __events[i]
+
+        if (!record) {
+          el = __events.length
+          i--
+          continue
+        }
+
+        if (
+          record.name === name &&
+          /**
+           * 不指定命名空间，会触发所有name相同的注册事件
+           */
+          (type === '' || record.type === type)
+        ) {
+          record.listener(e, ...dataSet)
+          onPub?.(event, e, ...dataSet)
+        }
+      }
+    })
   }
 
-  function countEvents () {
-    return events.length
+  /**
+   * 获取指定或所有事件的有效的绑定记录总数
+   * @param event 
+   */
+  function listenerCount (event?: string) {
+    if (event) {
+      return __events
+        .filter(record => parseEventName(event)
+          .some(event => event.name === record.name && (event.type === '' || event.type === record.type))
+        ).length
+    }
+    return __events.length
   }
 
-  return { on, once, off, emit, countEvents }
+  /**
+   * 更新最大可存在的事件绑定记录值
+   * @param max 
+   */
+  function setMaxListeners (max: number) {
+    MAX_LISTENERS = Math.max(DEFAULT_MAX_LISTENERS, max)
+  }
+
+  /**
+   * 查看当前可绑定的事件记录的最大值
+   */
+  function getMaxListeners () {
+    return MAX_LISTENERS
+  }
+
+  return {
+    on,
+    once,
+    off,
+    emit,
+    listenerCount,
+    setMaxListeners,
+    getMaxListeners,
+  }
 }
 
 export default useEvent
