@@ -356,3 +356,112 @@ describe('事件触发', () => {
     expect(listenerCount()).toEqual(max)
   })
 })
+
+describe('取消所有订阅', () => {
+  test('无命名空间-指定处理器取消', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(event, handler)
+    expect(listenerCount()).toBe(1)
+    expect(listenerCount()).toEqual(listenerCount(event))
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+
+  test('带1一个命名空间-指定处理器取消', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event.ns'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(event, handler)
+    expect(listenerCount()).toBe(1)
+    expect(listenerCount()).toEqual(listenerCount(event))
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+
+  test('带大于1一个命名空间,指定处理器取消', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event.ns.ns2'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(event, handler)
+    expect(listenerCount()).toBe(2)
+    expect(listenerCount()).toEqual(listenerCount(event))
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+
+  test('多个命名空间订阅，单个命名空间取消-指定处理器', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event'
+    const ns = 'sn'
+    const ns2 = 'ns2'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(`${event}.${ns}.${ns2}`, handler)
+    expect(listenerCount()).toBe(2)
+    expect(listenerCount()).toEqual(listenerCount(event))
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+
+  test('多个命名空间订阅，单个命名空间取消-不指定处理器', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event'
+    const ns = 'sn'
+    const ns2 = 'ns2'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(`${event}.${ns}.${ns2}`, handler)
+    expect(listenerCount()).toBe(2)
+    expect(listenerCount()).toEqual(listenerCount(event))
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+
+  test('多个命名空间订阅，不带命名空间一次性全部取消-不指定处理器', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event'
+    const ns = 'sn'
+    const ns2 = 'ns2'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(`${event}.${ns}.${ns2}`, handler)
+    expect(listenerCount()).toBe(2)
+    expect(listenerCount()).toEqual(listenerCount(event))
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+
+  test('相同事件多个处理器订阅，指定处理器取消', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event'
+    const handler = () => {}
+    const handler2 = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(event, handler)
+
+    expect(listenerCount()).toBe(1)
+    on(event, handler2)
+    expect(listenerCount()).toBe(2)
+
+    off('*')
+    expect(listenerCount()).toBe(0)
+  })
+})

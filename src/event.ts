@@ -123,25 +123,30 @@ export function useEvent (
    * @param listener
    */
   function off (event: string, listener?: EventListener) {
-    useEventName(event, (name, type) => {
-      for (var i = 0, j = -1, el = __events.length; i < el; i++) {
-        const record = __events[i]
-        if (
-          record.name === name &&
-          /**
-           * 不指定命名空间，会删除所有name相同的注册事件
-           */
-          (type === '' || record.type === type) &&
-          (!listener || record.rawListener === listener)
-        ) {
-          onRemove?.(record.name, record.listener, record.options)
-        } else {
-          __events[++j] = record
+    if (event === '*') {
+      __events.length = 0
+    } else {
+      useEventName(event, (name, type) => {
+        let j = -1
+        for (let i = 0, el = __events.length; i < el; i++) {
+          const record = __events[i]
+          if (
+            record.name === name &&
+            /**
+             * 不指定命名空间，会删除所有name相同的注册事件
+             */
+            (type === '' || record.type === type) &&
+            (!listener || record.rawListener === listener)
+          ) {
+            onRemove?.(record.name, record.listener, record.options)
+          } else {
+            __events[++j] = record
+          }
         }
-      }
-
-      __events.length = ++j
-    })
+  
+        __events.length = ++j
+      })
+    }
   }
 
   /**
