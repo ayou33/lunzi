@@ -1,8 +1,8 @@
-import supoprtDomEvent from "../src/domEvent"
+import supportDomEvent from "../src/domEvent"
 
 const dom = document.createElement('div')
 
-const { on, off } =  supoprtDomEvent(dom)
+const { on, off } =  supportDomEvent(dom)
 
 describe('dom节点事件支持', () => {
   test('dom 事件绑定', () => {

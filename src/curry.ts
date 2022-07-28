@@ -3,17 +3,17 @@ export const _ = {
 }
 
 function isPlaceholder (a: any) {
-  return a === _ && a._ === _._ 
+  return a === _ && a._ === _._
 }
 
 type AnyFunction = (...args: any[]) => any
 
 /**
- * 
+ *
  * @param required 本次柯里化需要的实参数量
  * @param receieved 本次传入的实参
  * @param fn 柯里化函数对象
- * @returns 
+ * @returns
  */
 function _curryN (required: number, receieved: any[], fn: AnyFunction): AnyFunction {
   return function () {
@@ -58,7 +58,7 @@ function _curryN (required: number, receieved: any[], fn: AnyFunction): AnyFunct
 
 export const curryN = _curryN(2, [], (required: number, fn: AnyFunction) => _curryN(required, [], fn))
 
-function curry (fn: AnyFunction) {
+export function curry (fn: AnyFunction) {
   return _curryN(fn.length, [], fn)
 }
 

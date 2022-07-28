@@ -1,6 +1,6 @@
 /*
- * @Author: 阿佑[ayooooo@petalmail.com] 
- * @Date: 2022-07-05 10:19:01 
+ * @Author: 阿佑[ayooooo@petalmail.com]
+ * @Date: 2022-07-05 10:19:01
  * @Last Modified by: 阿佑
  * @Last Modified time: 2022-07-07 18:50:14
  */
@@ -50,7 +50,7 @@ function createPrinter (log: Log, name?: string, cssText?: string): Printer {
 
   /**
    * 单次日志过滤
-   * @param mix 
+   * @param mix
    */
   output.if = (mix: any) => {
     return (...args: any[]) => {
@@ -87,7 +87,7 @@ class Log {
 
   /**
    * 日志按逻辑打开/关闭
-   * @param pred 
+   * @param pred
    */
   if (pred: () => boolean) {
     this.#pred = pred
@@ -102,7 +102,7 @@ class Log {
 
   /**
    * 过滤日志输出内容
-   * @param pattern 
+   * @param pattern
    */
   filter (pattern: RegExp) {
     this.#pattern = pattern
@@ -110,7 +110,7 @@ class Log {
 
   /**
    * 过滤日志badge
-   * @param pattern 
+   * @param pattern
    */
   fitlerBadge (pattern: RegExp) {
     this.#badgeParttern = pattern
@@ -118,8 +118,8 @@ class Log {
 
   /**
    * 执行过滤条件
-   * @param badge 
-   * @param text 
+   * @param badge
+   * @param text
    */
   isMatch (badge: string, text: string) {
     return this.#badgeParttern.test(badge) && this.#pattern.test(text)
@@ -127,8 +127,8 @@ class Log {
 
   /**
    * 创建新的日志对象
-   * @param badge 
-   * @param style 
+   * @param badge
+   * @param style
    */
   create (badge?: string, style?: string) {
     return createPrinter(this, badge, style)
@@ -136,8 +136,8 @@ class Log {
 
   /**
    * 关注日志打印
-   * @param method 
-   * @param args 
+   * @param method
+   * @param args
    */
   report (method: string, ...args: any[]) {
     this.#callback?.(method, ...args)
@@ -145,14 +145,14 @@ class Log {
 
   /**
    * 响应日志打印
-   * @param cb 
+   * @param cb
    */
   bindCallback (cb: ((...args: any[]) => void) | null) {
     this.#callback = cb
   }
 }
 
-const log = new Log()
+export const log = new Log()
 
 export const create = log.create.bind(log)
 

@@ -40,7 +40,7 @@ export type EventRecord = {
 
 const DEFAULT_MAX_LISTENERS = 1000
 
-function useEvent (
+export function useEvent (
   onSub?: (event: string, listener: EventListener, options?: EventOptions) => void,
   onRemove?: (event: string, listener: EventListener, options?: EventOptions) => void,
   onPub?: (event: string, ...dataSet: any[]) => void,
