@@ -24,9 +24,9 @@ export type EventListener = (e: Event, ...dataSet: any[]) => void
 
 export type EventOptions = AddEventListenerOptions | boolean
 
-export function contextListener (listner: (e: Event, ...dataSet: any[]) => void) {
+export function contextListener (listener: (e: Event, ...dataSet: any[]) => void) {
   return (e: Event, ...dataSet: any[]) => {
-    listner(e, ...dataSet)
+    listener(e, ...dataSet)
   }
 }
 
@@ -54,7 +54,7 @@ function useEvent (
    * 绑定规则
    *  相同的绑定会替换原有的事件处理器以及事件处理配置项
    *  新的绑定会添加一条新的绑定记录
-   * 
+   *
    * 相同的绑定是指 name,namespace,listener同时绝对相等则视为相同的绑定
    * @param event string 'name.namespace1.namespace2 name2.namespace1.namespace2'
    * @param listener function (e: Event, ...data) => void
@@ -103,9 +103,9 @@ function useEvent (
   /**
    * 一次性绑定即 党所绑定的事件触发之后立即自动解绑
    * 事件指定规则同on
-   * @param event 
-   * @param listener 
-   * @param options 
+   * @param event
+   * @param listener
+   * @param options
    */
   function once (event: string, listener: EventListener, options?: EventOptions) {
     on(event, function handler (e: Event, ...dataSet: any[]) {
@@ -119,8 +119,8 @@ function useEvent (
    * 事件指定规则同on
    * 解绑规则
    *  对可选命名空间和事件处理器若指定则进行绝对相等匹配,若不指定则只进行name匹配
-   * @param event 
-   * @param listener 
+   * @param event
+   * @param listener
    */
   function off (event: string, listener?: EventListener) {
     useEventName(event, (name, type) => {
@@ -148,8 +148,8 @@ function useEvent (
    * 事件指定规则同on
    * 触发匹配规则
    *  对name和可选的命名空间做绝对相等匹配
-   * @param event 
-   * @param dataSet 
+   * @param event
+   * @param dataSet
    */
   function emit (event: string, ...dataSet: any[]) {
     useEventName(event, (name, type) => {
@@ -179,7 +179,7 @@ function useEvent (
 
   /**
    * 获取指定或所有事件的有效的绑定记录总数
-   * @param event 
+   * @param event
    */
   function listenerCount (event?: string) {
     if (event) {
@@ -193,7 +193,7 @@ function useEvent (
 
   /**
    * 更新最大可存在的事件绑定记录值
-   * @param max 
+   * @param max
    */
   function setMaxListeners (max: number) {
     MAX_LISTENERS = Math.max(DEFAULT_MAX_LISTENERS, max)
