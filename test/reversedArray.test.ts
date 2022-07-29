@@ -1,0 +1,93 @@
+import TimeArray from '../src/reversedArray'
+
+describe('push', () => {
+  test('push item', () => {
+    const arr = new TimeArray([1, 2])
+    arr.push(3)
+    expect(arr.length()).toBe(3)
+    expect(arr.item(0)).toBe(3)
+  })
+
+  test('push items', () => {
+    const arr = new TimeArray([1, 2])
+    arr.push([3,4])
+    expect(arr.length()).toBe(4)
+    expect(arr.item(0)).toBe(4)
+  })
+})
+
+describe('unshift', () => {
+  test('unshift item', () => {
+    const arr = new TimeArray([2, 3])
+    arr.unshift(1)
+    expect(arr.length()).toBe(3)
+    expect(arr.item(-1)).toBe(1)
+  })
+
+  test('unshift items', () => {
+    const arr = new TimeArray([3,4])
+    arr.unshift([1,2])
+    expect(arr.length()).toBe(4)
+    expect(arr.item(-1)).toBe(1)
+  })
+})
+
+describe('length', () => {
+  test('length', () => {
+    const arr = new TimeArray([2, 3])
+    expect(arr.length()).toBe(2)
+    arr.unshift(1)
+    expect(arr.length()).toBe(3)
+    arr.push(4)
+    expect(arr.length()).toBe(4)
+  })
+})
+
+describe('value', () => {
+  test('value', () => {
+    const arr = new TimeArray([2, 3])
+    expect(arr.value()).toEqual([2, 3])
+    arr.unshift(1)
+    expect(arr.value()).toEqual([1, 2, 3])
+    arr.push(4)
+    expect(arr.value()).toEqual([1, 2, 3, 4])
+  })
+})
+
+describe('subArray', () => {
+  test('subArray', () => {
+    const arr = new TimeArray([1, 2, 3, 4])
+    const exp = arr.subArray(0, 2)
+    expect(exp).toEqual([3, 4])
+
+    const exp1 = arr.subArray(1, 2)
+    expect(exp1).toEqual([2, 3])
+  })
+})
+
+describe('slice', () => {
+  test('slice', () => {
+    const arr = new TimeArray([1, 2, 3, 4])
+    const exp = arr.slice(0, 2)
+    expect(exp).toEqual([3, 4])
+
+    const exp1 = arr.slice(1, 2)
+    expect(exp1).toEqual([3])
+  })
+})
+
+describe('first', () => {
+  test('first', () => {
+    const arr = new TimeArray([1, 2, 3, 4])
+    const exp = arr.first()
+    expect(exp).toBe(4)
+  })
+})
+
+describe('head', () => {
+  test('head', () => {
+    const arr = new TimeArray([1, 2, 3, 4])
+    const exp = arr.head(4)
+    expect(exp).toEqual([1, 2, 3, 4])
+  })
+})
