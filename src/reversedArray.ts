@@ -1,8 +1,15 @@
 class ReversedArray<T = number> {
   private __baseArr: any[] = []
 
-  constructor (arr: any[]) {
-    this.__baseArr = arr
+  public [Symbol.iterator] () {
+    return this.__baseArr[Symbol.iterator]()
+  }
+
+  constructor (arr?: any[]) {
+    this.__baseArr = []
+    if (Array.isArray(arr)) {
+      this.__baseArr = arr
+    }
   }
 
   private indexCalc (i: number) {
@@ -61,6 +68,7 @@ class ReversedArray<T = number> {
    * @param count 
    */
   subArray (begin: number, count: number): T[] {
+    count = count < 0 ? 0 : count
     const end = begin + count
     return this.slice(begin, end)
   }
