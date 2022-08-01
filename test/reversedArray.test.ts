@@ -80,6 +80,12 @@ describe('slice', () => {
 
     const exp2 = arr.slice(1, -1)
     expect(exp2).toEqual([2, 3])
+
+    const exp3 = arr.slice(0, -2)
+    expect(exp3).toEqual([3, 4])
+
+    const exp4 = arr.slice(-2, -1)
+    expect(exp4).toEqual([2])
   })
 })
 
@@ -88,6 +94,9 @@ describe('first', () => {
     const arr = new ReversedArray([1, 2, 3, 4])
     const exp = arr.first()
     expect(exp).toBe(4)
+
+    const exp1 = new ReversedArray().first()
+    expect(exp1).toBe(undefined)
   })
 })
 
@@ -96,6 +105,12 @@ describe('head', () => {
     const arr = new ReversedArray([1, 2, 3, 4])
     const exp = arr.head(4)
     expect(exp).toEqual([1, 2, 3, 4])
+
+    const exp1 = arr.head(-1)
+    expect(exp1).toEqual([])
+
+    const exp2 = arr.head(0)
+    expect(exp2).toEqual([])
   })
 })
 
@@ -110,5 +125,8 @@ describe('item', () => {
 
     const exp2 = arr.item(1)
     expect(exp2).toBe(3)
+
+    const exp3 = arr.item(5)
+    expect(exp3).toBe(undefined)
   })
 })

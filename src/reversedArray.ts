@@ -79,13 +79,6 @@ class ReversedArray<T = number> {
    * @param end 
    */
   slice (begin: number, end: number): T[] {
-    // for (let i = this.indexCalc(end) + 1; i <= this.indexCalc(begin); i++){
-    //   if (this.__baseArr[i] === undefined) {
-    //     // break
-    //   } else {
-    //     temp.push(this.__baseArr[i])
-    //   }
-    // }
     return this.__baseArr.slice(this.indexCalc(end) + 1 < 0 ? 0: this.indexCalc(end) + 1, this.indexCalc(begin) + 1)
   }
 
