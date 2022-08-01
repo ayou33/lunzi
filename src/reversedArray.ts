@@ -1,4 +1,4 @@
-class ReversedArray<T = number> {
+export class ReversedArray<T = number> {
   private __baseArr: any[] = []
 
   public [Symbol.iterator] () {
