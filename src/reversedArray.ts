@@ -1,23 +1,23 @@
 export class ReversedArray<T = number> {
-  private __baseArr: any[] = []
+  private readonly _arr: any[] = []
 
   public [Symbol.iterator] () {
-    return this.__baseArr[Symbol.iterator]()
+    return this._arr[Symbol.iterator]()
   }
 
   constructor (arr?: any[]) {
-    this.__baseArr = []
+    this._arr = []
     if (Array.isArray(arr)) {
-      this.__baseArr = arr
+      this._arr = arr
     }
   }
 
-  private indexCalc (i: number) {
+  private transfer (i: number) {
     let index = 0
     if (i === 0) {
-      index = this.__baseArr.length - 1
+      index = this._arr.length - 1
     } else if (i > 0) {
-      index = (this.__baseArr.length - i - 1)
+      index = (this._arr.length - i - 1)
     } else {
       index = -(i + 1)
     }
@@ -25,7 +25,7 @@ export class ReversedArray<T = number> {
   }
 
   item (index: number): T | undefined {
-    return this.__baseArr[this.indexCalc(index)]
+    return this._arr[this.transfer(index)]
   }
 
   /**
@@ -34,9 +34,9 @@ export class ReversedArray<T = number> {
    */
   push (items: T[] | T): this {
     if (Array.isArray(items)) {
-      this.__baseArr.push(...items)
+      this._arr.push(...items)
     } else {
-      this.__baseArr.push(items)
+      this._arr.push(items)
     }
     return this
   }
@@ -47,25 +47,30 @@ export class ReversedArray<T = number> {
    */
   unshift (items: T[] | T): this {
     if (Array.isArray(items)) {
-      this.__baseArr.unshift(...items)
+      this._arr.unshift(...items)
     } else {
-      this.__baseArr.unshift(items)
+      this._arr.unshift(items)
     }
     return this
   }
 
+  empty () {
+    this._arr.length = 0
+    return this
+  }
+
   length () {
-    return this.__baseArr.length
+    return this._arr.length
   }
 
   value (): T[] {
-    return this.__baseArr
+    return this._arr
   }
 
   /**
    * 从起始索引号提取数组中指定数目的元素
-   * @param begin 
-   * @param count 
+   * @param begin
+   * @param count
    */
   subArray (begin: number, count: number): T[] {
     count = count < 0 ? 0 : count
@@ -75,15 +80,15 @@ export class ReversedArray<T = number> {
 
   /**
    * 提取数组中两个指定的索引号之间的元素 [begin, end)
-   * @param begin 
-   * @param end 
+   * @param begin
+   * @param end
    */
   slice (begin: number, end: number): T[] {
-    return this.__baseArr.slice(this.indexCalc(end) + 1 < 0 ? 0: this.indexCalc(end) + 1, this.indexCalc(begin) + 1)
+    return this._arr.slice(this.transfer(end) + 1 < 0 ? 0: this.transfer(end) + 1, this.transfer(begin) + 1)
   }
 
   first (): T | undefined {
-    return this.__baseArr[this.__baseArr.length-1]
+    return this._arr[this._arr.length-1]
   }
 
   head (n: number): T[] {
