@@ -13,15 +13,7 @@ export class ReversedArray<T = number> {
   }
 
   private transfer (i: number) {
-    let index = 0
-    if (i === 0) {
-      index = this._arr.length - 1
-    } else if (i > 0) {
-      index = (this._arr.length - i - 1)
-    } else {
-      index = -(i + 1)
-    }
-    return index
+    return i >= 0 ? (this._arr.length - 1 - i) : (-i - 1)
   }
 
   item (index: number): T | undefined {
@@ -84,15 +76,19 @@ export class ReversedArray<T = number> {
    * @param end
    */
   slice (begin: number, end: number): T[] {
-    return this._arr.slice(this.transfer(end) + 1 < 0 ? 0: this.transfer(end) + 1, this.transfer(begin) + 1)
+    return this._arr.slice(this.transfer(end) + 1 < 0 ? 0 : this.transfer(end) + 1, this.transfer(begin) + 1)
   }
 
   first (): T | undefined {
-    return this._arr[this._arr.length-1]
+    return this._arr[this._arr.length - 1]
   }
 
   head (n: number): T[] {
     return this.subArray(0, n)
+  }
+
+  update (index: number, d: T) {
+    this._arr[this.transfer(index)] = d
   }
 }
 

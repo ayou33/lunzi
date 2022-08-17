@@ -130,3 +130,27 @@ describe('item', () => {
     expect(exp3).toBe(undefined)
   })
 })
+
+describe('empty', () => {
+  test('empty array', () => {
+    const arr = new ReversedArray([0])
+
+    expect(arr.length()).toBe(1)
+
+    arr.empty()
+
+    expect(arr.length()).toBe(0)
+  })
+})
+
+describe('update', () => {
+  test('update element', () => {
+    const arr = new ReversedArray([0, 1])
+
+    expect(arr.item(0)).toBe(1)
+
+    arr.update(0, 2)
+
+    expect(arr.item(0)).toBe(2)
+  })
+})
