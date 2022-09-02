@@ -65,24 +65,24 @@ function createPrinter (log: Log, name?: string, cssText?: string): Printer {
 }
 
 class Log {
-  #available = true
-  #pred: () => boolean = () => true
-  #pattern: RegExp = /.*/
-  #badgeParttern: RegExp = /.*/
-  #callback: null | ((...args: any[]) => void) = null
+  private _available = true
+  private _pred: () => boolean = () => true
+  private _pattern: RegExp = /.*/
+  private _badgePattern: RegExp = /.*/
+  private _callback: null | ((...args: any[]) => void) = null
 
   /**
    * 日志打开
    */
   on () {
-    this.#available = true
+    this._available = true
   }
 
   /**
    * 日志关闭
    */
   off () {
-    this.#available = false
+    this._available = false
   }
 
   /**
@@ -90,14 +90,14 @@ class Log {
    * @param pred
    */
   if (pred: () => boolean) {
-    this.#pred = pred
+    this._pred = pred
   }
 
   /**
    * 检查日志是否打开状态
    */
   isEnable () {
-    return this.#available && this.#pred()
+    return this._available && this._pred()
   }
 
   /**
@@ -105,7 +105,7 @@ class Log {
    * @param pattern
    */
   filter (pattern: RegExp) {
-    this.#pattern = pattern
+    this._pattern = pattern
   }
 
   /**
@@ -113,7 +113,7 @@ class Log {
    * @param pattern
    */
   fitlerBadge (pattern: RegExp) {
-    this.#badgeParttern = pattern
+    this._badgePattern = pattern
   }
 
   /**
@@ -122,7 +122,7 @@ class Log {
    * @param text
    */
   isMatch (badge: string, text: string) {
-    return this.#badgeParttern.test(badge) && this.#pattern.test(text)
+    return this._badgePattern.test(badge) && this._pattern.test(text)
   }
 
   /**
@@ -140,7 +140,7 @@ class Log {
    * @param args
    */
   report (method: string, ...args: any[]) {
-    this.#callback?.(method, ...args)
+    this._callback?.(method, ...args)
   }
 
   /**
@@ -148,7 +148,7 @@ class Log {
    * @param cb
    */
   bindCallback (cb: ((...args: any[]) => void) | null) {
-    this.#callback = cb
+    this._callback = cb
   }
 }
 
