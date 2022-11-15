@@ -292,6 +292,30 @@ describe('事件触发', () => {
     expect(handler).toHaveBeenCalled()
   })
 
+  test('*处理器', () => {
+    const { on, emit } = useEvent()
+
+    const event = 'event1'
+    const event2 = 'event1.ns'
+    const event3 = 'event2'
+    const event4 = 'event2.ns'
+    const handler = jest.fn()
+
+    on('*', handler)
+
+    emit(event)
+    expect(handler).toHaveBeenCalledTimes(1)
+
+    emit(event2)
+    expect(handler).toHaveBeenCalledTimes(2)
+
+    emit(event3)
+    expect(handler).toHaveBeenCalledTimes(3)
+
+    emit(event4)
+    expect(handler).toHaveBeenCalledTimes(4)
+  })
+
   test('触发指定命名空间的事件', () => {
     const { on, emit } = useEvent()
 

@@ -143,7 +143,7 @@ export function useEvent (
             __events[++j] = record
           }
         }
-  
+
         __events.length = ++j
       })
     }
@@ -169,6 +169,7 @@ export function useEvent (
         }
 
         if (
+          record.name === '*' ||
           record.name === name &&
           /**
            * 不指定命名空间，会触发所有name相同的注册事件
