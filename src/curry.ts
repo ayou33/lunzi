@@ -11,48 +11,48 @@ type AnyFunction = (...args: any[]) => any
 /**
  *
  * @param required 本次柯里化需要的实参数量
- * @param receieved 本次传入的实参
+ * @param received 本次传入的实参
  * @param fn 柯里化函数对象
  * @returns
  */
-function _curryN (required: number, receieved: any[], fn: AnyFunction): AnyFunction {
+function _curryN (required: number, received: any[], fn: AnyFunction): AnyFunction {
   return function () {
     /**
      * 该数组中可能存在placeholder元素
      */
-    const combind: any[] = []
+    const combined: any[] = []
 
     let left = required
-    let combindIndex = 0
+    let combinedIndex = 0
     let argIndex = 0
 
-    while (combindIndex < receieved.length || argIndex < arguments.length) {
+    while (combinedIndex < received.length || argIndex < arguments.length) {
       let argument: any
 
       /**
        * 利用arguments替换received中的placeholder
        */
       if (
-        combindIndex < receieved.length &&
-        (!isPlaceholder(receieved[combindIndex]) || argIndex >= arguments.length)
+        combinedIndex < received.length &&
+        (!isPlaceholder(received[combinedIndex]) || argIndex >= arguments.length)
       ) {
-        argument = receieved[combindIndex]
+        argument = received[combinedIndex]
       } else {
         argument = arguments[argIndex]
         argIndex++
       }
 
-      combind[combindIndex] = argument
+      combined[combinedIndex] = argument
 
       if (!isPlaceholder(argument)) {
         left--
       }
 
-      combindIndex++
+      combinedIndex++
     }
 
-    if (left <= 0) return fn(...combind)
-    return _curryN(required, combind, fn)
+    if (left <= 0) return fn(...combined)
+    return _curryN(required, combined, fn)
   }
 }
 
