@@ -98,17 +98,21 @@ export function useEvent (
         throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
       }
     })
+    
+    return () => {
+      off(event, listener)
+    }
   }
 
   /**
-   * 一次性绑定即 党所绑定的事件触发之后立即自动解绑
+   * 一次性绑定即 当所绑定的事件触发之后立即自动解绑
    * 事件指定规则同on
    * @param event
    * @param listener
    * @param options
    */
   function once (event: string, listener: EventListener, options?: EventOptions) {
-    on(event, function handler (e: Event, ...dataSet: any[]) {
+    return on(event, function handler (e: Event, ...dataSet: any[]) {
       listener(e, ...dataSet)
       off(event, handler)
     }, options)

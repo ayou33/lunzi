@@ -2,7 +2,7 @@ export const _ = {
   _: '_',
 }
 
-function isPlaceholder (a: any) {
+function isPlaceholder (a: { _?: string }) {
   return a === _ && a._ === _._
 }
 
