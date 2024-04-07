@@ -11,7 +11,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "test": "jest --coverage test/stateQueue.test.ts"
+    "test": "jest --coverage test/fetch.test.ts"
   },
   "repository": {
     "type": "git",
@@ -22,5 +22,8 @@
   "bugs": {
     "url": "https://github.com/ayou-ok/lunzi/issues"
   },
-  "homepage": "https://github.com/ayou-ok/lunzi#readme"
+  "homepage": "https://github.com/ayou-ok/lunzi#readme",
+  "dependencies": {
+    "axios": "^1.6.8"
+  }
 }
