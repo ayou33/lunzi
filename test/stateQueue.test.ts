@@ -30,14 +30,51 @@ describe('stateQueue', () => {
   test('cancel removes task from the queue by id', () => {
     const id = queue.enqueue(task)
     queue.cancel(id)
-    expect(queue.getTasks()).not.toContain(task)
+    expect(queue.getTasks()).toHaveLength(0)
+  })
+  
+  test('cancel running task by id', async () => {
+    const task = {
+      label: 'testTask',
+      run: () => new Promise((resolve) => {
+        setTimeout(resolve, 1000)
+      }),
+    }
+    const id = queue.enqueue(task, TaskRunType.IMMEDIATE)
+    queue.cancel(id)
+    return new Promise((resolve) => {
+      resolve(true)
+    }).then(() => {
+        expect(queue.getRunningTasks()).toHaveLength(0)
+      },
+    )
+  })
+  
+  test('cancel all queued and running tasks by label', async () => {
+    queue.enqueue(task, TaskRunType.MANUAL)
+    const task2 = {
+      label: task.label,
+      run: () => new Promise((resolve) => {
+        setTimeout(resolve, 1000)
+      }),
+    }
+    
+    queue.enqueue(task2, TaskRunType.IMMEDIATE)
+    queue.cancel(task.label!)
+    
+    return new Promise((resolve) => {
+      resolve(true)
+    }).then(() => {
+      expect(queue.getTasks()).toHaveLength(0)
+      expect(queue.getRunningTasks()).toHaveLength(0)
+    })
   })
   
   test('cancel removes task from the queue by label', () => {
     task.label = 'testLabel'
     queue.enqueue(task)
     queue.cancel(task.label)
-    expect(queue.getTasks()).not.toContain(task)
+    expect(queue.getTasks()).toHaveLength(0)
   })
   
   test('onStateChange triggers handler when state changes', () => {

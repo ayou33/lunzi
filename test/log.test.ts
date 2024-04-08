@@ -62,7 +62,7 @@ describe('print', () => {
   })
 
 
-  test('print 2 by wraning', () => {
+  test('print 2 by warning', () => {
     const callback = jest.fn()
     log.bindCallback(callback)
     print.warn(2)

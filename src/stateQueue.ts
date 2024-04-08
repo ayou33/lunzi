@@ -3,6 +3,7 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/3 16:53
  */
+import controlledPromise from './controlledPromise'
 import useEvent from './event'
 
 /**
@@ -21,9 +22,10 @@ export enum QueueState {
  * @interface
  */
 export interface TaskMeta {
-  priority?: number;
+  id?: string;
   label?: string;
-  run: () => unknown;
+  priority?: number;
+  run: (controller: AbortController) => unknown;
 }
 
 export enum TaskRunType {
@@ -33,8 +35,8 @@ export enum TaskRunType {
 }
 
 type Task = Required<Omit<TaskMeta, 'run'>> & {
-  id: string;
   run: () => Promise<unknown>;
+  controller: AbortController;
 }
 
 const DEFAULT_PRIORITY = 0
@@ -54,7 +56,7 @@ export interface StateQueue {
  * @returns {string} A random string.
  */
 function makeId (): string {
-  return Math.random().toString(36).slice(2)
+  return (Math.random() + Math.random()).toString(36).slice(2)
 }
 
 /**
@@ -92,17 +94,31 @@ export default function stateQueue (parallel: number = 1): StateQueue {
    */
   function buildTaskObject (task: Parameters<typeof enqueue>[0]): Task {
     const run = 'function' === typeof task ? task : task.run
+    const controller = new AbortController()
     
     return {
       id: makeId(),
       priority: DEFAULT_PRIORITY,
       label: LABEL_UNKNOWN,
       ...task,
-      async run () {
-        const result = await run()
-        interrupt()
-        return result
+      run () {
+        const [promise] = controlledPromise(async (resolve, reject) => {
+          try {
+            /**
+             * 同步 controller 来同步管理用户任务与队列任务
+             * 以此来避免用户任务在队列任务执行时被取消
+             * 或者队列任务在用户任务执行时被取消
+             */
+            resolve(await run(controller))
+            interrupt()
+          } catch (error) {
+            reject(error as Error)
+          }
+        }, controller)
+        
+        return promise
       },
+      controller,
     }
   }
 
@@ -119,7 +135,7 @@ export default function stateQueue (parallel: number = 1): StateQueue {
       .run()
       .finally(() => {
         running.splice(running.indexOf(task), 1)
-
+        
         next()
       })
   }
@@ -191,15 +207,26 @@ export default function stateQueue (parallel: number = 1): StateQueue {
    * @param {string|string[]} idOrLabel - The ID or label of the task to be cancelled.
    */
   function cancel (idOrLabel: string | string[]) {
-    const predicate = 'string' === typeof idOrLabel
+    // cancel queued tasks
+    const shouldKeep = 'string' === typeof idOrLabel
       ? ({ id, label }: Pick<Task, 'id' | 'label'>) => !(id == idOrLabel || label === idOrLabel)
       : ({ id, label }: Pick<Task, 'id' | 'label'>) => !(idOrLabel.includes(id) || idOrLabel.includes(label))
 
-    const left = tasks.filter(predicate)
+    const left = tasks.filter(shouldKeep)
 
     tasks.length = 0
 
     tasks.push(...left)
+    
+    /**
+     * abort running tasks
+     * @warn 运行中的任务取消是一个异步操作 当前事件循环周期结束时才会执行
+      */
+    running.forEach(task => {
+      if (!shouldKeep(task)) {
+        task.controller.abort()
+      }
+    })
   }
 
   return {

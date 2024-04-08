@@ -12,64 +12,96 @@ type XHR = {
   abort: () => void
 }
 
-function parseRequestId (config: { url: string; data?: Data }) {
-  return (config.url)
+export type StateFetchConfig = {
+  id?: string; // for cancel control
+  label?: string; // for batch cancel control
+  priority?: number; // for queue order control
+  expireIn?: number; // for cache control; cache duration(ms)
+}
+
+type StateConfig = {
+  url: string; // for repeat control
+  data?: Data // optional for repeat control
+} & StateFetchConfig
+
+/**
+ * 利用url和data来生成唯一的请求id
+ * @param config
+ */
+function parseRequestId (config: StateConfig) {
+  const searchParams = new URLSearchParams(config.data as Record<string, string>)
+  searchParams.sort()
+  return config.url + searchParams.toString()
 }
 
 export default function stateFetch (parallel = 3) {
-  const labels = new Map<Symbol, string>()
   const queue = stateQueue(parallel)
   const running = new Map<string, XHR>()
+  const cache = new Map<string, {
+    expires: number
+    resp: unknown | null
+  }>()
   
-  function isRepeatRequest (id: string) {
-    return running.has(id)
-  }
-  
-  function send<T, C extends { url: string, data?: Data }> (fetch: (config: C) => Promise<T>, config: C) {
+  function send<T, C extends StateConfig> (fetch: (config: C) => Promise<T>, config: C) {
     return new Promise<T>((resolve, reject) => {
-      queue.enqueue(() => {
-        const id = parseRequestId(config)
-        
-        if (isRepeatRequest(id)) {
-          (running.get(id)?.following ?? []).push((err, resp) => {
-            if (err) reject(err)
-            else resolve(resp as T)
+      const requestId = parseRequestId(config)
+      
+      if (!requestId) return reject(new Error('Invalid request url'))
+      
+      queue.enqueue({
+        id: config.id,
+        label: config.label,
+        priority: config.priority,
+        run: controller => {
+          if (running.has(requestId)) {
+            if (!running.get(requestId)!.following) running.get(requestId)!.following = []
+            
+            running.get(requestId)!.following!.push((err, resp) => {
+              if (err) reject(err)
+              else resolve(resp as T)
+            })
+            
+            return
+          }
+          
+          if (cache.has(requestId)) {
+            const { expires, resp } = cache.get(requestId)!
+            // 缓存命中 直接返回
+            if (resp && Date.now() < expires) {
+              return resolve(resp as T)
+            }
+          }
+          
+          return fetch({
+            ...config,
+            signal: controller.signal,
           })
-          return
-        }
-        
-        const controller = new AbortController()
-        
-        running.set(id, {
-          abort: controller.abort,
-        })
-        
-        return fetch({
-          ...config,
-          signal: controller.signal,
-        })
-          .then(resp => {
-            resolve(resp)
-            running.get(id)?.following?.forEach(cb => cb(null, resp))
-          })
-          .catch((err) => {
-            reject(err)
-            running.get(id)?.following?.forEach(cb => cb(err))
-          })
-          .finally(() => {
-            running.delete(id)
-          })
+            .then(resp => {
+              resolve(resp)
+              running.get(requestId)?.following?.forEach(cb => cb(null, resp))
+              
+              // 复写缓存
+              if (config.expireIn) {
+                cache.set(requestId, {
+                  expires: Date.now() + config.expireIn,
+                  resp,
+                })
+              }
+            })
+            .catch((err) => {
+              reject(err)
+              running.get(requestId)?.following?.forEach(cb => cb(err))
+            })
+            .finally(() => {
+              running.delete(requestId)
+            })
+        },
       })
     })
   }
   
-  function cancel (label: Symbol) {
-    const labelValue = labels.get(label)
-    
-    if (labelValue) {
-      labels.delete(label)
-      queue.cancel(labelValue)
-    }
+  function cancel (idOrLabel: string | string[]) {
+    queue.cancel(idOrLabel)
   }
   
   return {
