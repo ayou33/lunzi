@@ -107,5 +107,6 @@ export default function stateFetch (parallel = 3) {
   return {
     send,
     cancel,
+    on: queue.on,
   }
 }

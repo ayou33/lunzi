@@ -13,8 +13,9 @@ import useEvent from './event'
  */
 export enum QueueState {
   IDLE,
-  BUSY,
   INTERRUPT,
+  RUNNING,
+  BUSY,
 }
 
 /**
@@ -74,16 +75,16 @@ export default function stateQueue (parallel: number = 1): StateQueue {
    * Function to manage the execution of tasks.
    */
   function next () {
-    if (tasks.length === 0 && running.length === 0) {
-      idle()
-    }
-
     if (tasks.length > 0 && running.length < parallel) {
       const task = tasks.shift()
 
       if (task) {
         run(task)
       }
+    } else if (running.length >= parallel) {
+      emitBusy()
+    } else if (tasks.length === 0 && running.length === 0) {
+      emitIdle()
     }
   }
 
@@ -105,9 +106,9 @@ export default function stateQueue (parallel: number = 1): StateQueue {
         const [promise] = controlledPromise(async (resolve, reject) => {
           try {
             /**
-             * 同步 controller 来同步管理用户任务与队列任务
+             * 共享 controller 来同步管理用户任务与队列任务
              * 以此来避免用户任务在队列任务执行时被取消
-             * 或者队列任务在用户任务执行时被取消
+             * 或者队列任务在用户任务执行时被取消的不一致性
              */
             resolve(await run(controller))
             interrupt()
@@ -128,8 +129,8 @@ export default function stateQueue (parallel: number = 1): StateQueue {
    */
   function run (task: Task) {
     running.push(task)
-
-    busy()
+    
+    emitRunning()
 
     task
       .run()
@@ -171,15 +172,22 @@ export default function stateQueue (parallel: number = 1): StateQueue {
   /**
    * Function to emit an idle event.
    */
-  function idle () {
+  function emitIdle () {
     emit(stateEvent(QueueState.IDLE))
   }
 
   /**
    * Function to emit a busy event.
    */
-  function busy () {
+  function emitBusy () {
     emit(stateEvent(QueueState.BUSY))
+  }
+  
+  /**
+   * Function to emit a running event.
+   */
+  function emitRunning () {
+    emit(stateEvent(QueueState.RUNNING))
   }
 
   /**

@@ -5,33 +5,26 @@
  */
 import { get, post, cancel } from '../src/tools/fetch.axios'
 
-const getLocal = get('https://testweb.ddwawa.com/api/user/userinfo')
+const getLocal = get('https://testweb.ddwawa.com/api/user/userinfo', {
+  id: 'get'
+})
 
 describe('fetch', () => {
   test('get', async () => {
-    const id = 'jojo'
     const ecb = jest.fn()
-    await getLocal(null, {
-      id,
-      label: 'test',
-      expireIn: 1000,
-    })
+    await getLocal()
       .catch(ecb)
       .finally(() => {
         expect(ecb).toBeCalledTimes(0)
       })
     
-    cancel('j')
+    cancel('get')
   })
   
   test('post', async () => {
-    const id = 'jojo'
     const ecb = jest.fn()
-    await post('https://testweb.ddwawa.com/api/user/userinfo')(null, {
-      id,
-      label: 'test',
-      expireIn: 1000,
-    })
+    
+    await post('https://testweb.ddwawa.com/api/user/userinfo')()
       .catch(ecb)
       .finally(() => {
         expect(ecb).toBeCalledTimes(0)

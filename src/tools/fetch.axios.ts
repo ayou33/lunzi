@@ -53,8 +53,8 @@ export function receive (
   request: (config: AxiosRequestConfig) => Promise<AxiosResponse>,
   parser: <T>(resp: AxiosResponse<T>) => T = dftParser,
 ) {
-  return <T> (url: string) => {
-    return (data?: Record<string, unknown> | null, config?: AxiosRequestConfig & StateFetchConfig) => {
+  return <T> (url: string, config?: AxiosRequestConfig & StateFetchConfig) => {
+    return (data?: Record<string, unknown> | null) => {
       return send(
         request,
         {
