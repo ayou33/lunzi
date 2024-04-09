@@ -15,7 +15,7 @@ type AnyFunction = (...args: any[]) => any
  * @param fn 柯里化函数对象
  * @returns
  */
-function _curryN (required: number, received: any[], fn: AnyFunction): AnyFunction {
+function _curryN (required: number, fn: AnyFunction, received: any[] = []): AnyFunction {
   return function () {
     /**
      * 该数组中可能存在placeholder元素
@@ -52,14 +52,14 @@ function _curryN (required: number, received: any[], fn: AnyFunction): AnyFuncti
     }
 
     if (left <= 0) return fn(...combined)
-    return _curryN(required, combined, fn)
+    return _curryN(required, fn, combined)
   }
 }
 
-export const curryN = _curryN(2, [], (required: number, fn: AnyFunction) => _curryN(required, [], fn))
+export const curryN = _curryN(2, (required: number, fn: AnyFunction) => _curryN(required, fn))
 
 export function curry (fn: AnyFunction) {
-  return _curryN(fn.length, [], fn)
+  return _curryN(fn.length, fn)
 }
 
 export default curry

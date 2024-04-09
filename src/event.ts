@@ -3,7 +3,7 @@ export function parseEventName (name: string) {
     const names = n.split('.')
     const name = names[0].trim()
     const types = names.slice(1)
-
+    
     return types.length === 0 ? [{
       name,
       type: '',
@@ -47,7 +47,7 @@ export function useEvent (
 ) {
   const __events: EventRecord[] = []
   let MAX_LISTENERS = DEFAULT_MAX_LISTENERS
-
+  
   /**
    * 添加绑定
    * 事件指定规则 可支持带多个命名空间的多个事件一次性绑定 其中不同的事件之间以空白符分割，不同的命名空间以.分割
@@ -62,7 +62,7 @@ export function useEvent (
    */
   function on (event: string, listener: EventListener, options?: EventOptions) {
     const contextedListener = contextListener(listener)
-
+    
     useEventName(event, (name, type) => {
       for (let i = 0, el = __events.length; i < el; i++) {
         const record = __events[i]
@@ -83,7 +83,7 @@ export function useEvent (
           return
         }
       }
-
+      
       __events.push({
         name,
         type,
@@ -91,9 +91,9 @@ export function useEvent (
         rawListener: listener,
         options,
       })
-
+      
       onSub?.(name, contextedListener, options)
-
+      
       if (__events.length >= MAX_LISTENERS) {
         throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
       }
@@ -103,7 +103,7 @@ export function useEvent (
       off(event, listener)
     }
   }
-
+  
   /**
    * 一次性绑定即 当所绑定的事件触发之后立即自动解绑
    * 事件指定规则同on
@@ -117,7 +117,7 @@ export function useEvent (
       off(event, handler)
     }, options)
   }
-
+  
   /**
    * 事件解绑
    * 事件指定规则同on
@@ -147,12 +147,12 @@ export function useEvent (
             __events[++j] = record
           }
         }
-
+        
         __events.length = ++j
       })
     }
   }
-
+  
   /**
    * 事件指定规则同on
    * 触发匹配规则
@@ -165,13 +165,13 @@ export function useEvent (
       const e = new CustomEvent(name)
       for (let i = 0, el = __events.length; i < el; i++) {
         const record = __events[i]
-
+        
         if (!record) {
           el = __events.length
           i--
           continue
         }
-
+        
         if (
           record.name === '*' ||
           record.name === name &&
@@ -186,7 +186,7 @@ export function useEvent (
       }
     })
   }
-
+  
   /**
    * 获取指定或所有事件的有效的绑定记录总数
    * @param event
@@ -195,12 +195,12 @@ export function useEvent (
     if (event) {
       return __events
         .filter(record => parseEventName(event)
-          .some(event => event.name === record.name && (event.type === '' || event.type === record.type))
+          .some(event => event.name === record.name && (event.type === '' || event.type === record.type)),
         ).length
     }
     return __events.length
   }
-
+  
   /**
    * 更新最大可存在的事件绑定记录值
    * @param max
@@ -208,14 +208,14 @@ export function useEvent (
   function setMaxListeners (max: number) {
     MAX_LISTENERS = Math.max(DEFAULT_MAX_LISTENERS, max)
   }
-
+  
   /**
    * 查看当前可绑定的事件记录的最大值
    */
   function getMaxListeners () {
     return MAX_LISTENERS
   }
-
+  
   return {
     on,
     once,

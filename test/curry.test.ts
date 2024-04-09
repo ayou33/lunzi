@@ -69,6 +69,14 @@ describe('curryN', () => {
       expect(curryN(n)(fn)).toBeInstanceOf(Function)
       expect(curryN(n)(fn)(a)).toBe(a)
     })
+    
+    
+    test('带默认值的柯里化: (a, b, c = 3) => a + b + c', () => {
+      const defaultValue = 3
+      const fn = (a: number, b: number, c = defaultValue) => a + b + c
+      const add = curryN(2, fn)
+      expect(add(1)(2)).toBe(1 + 2 + defaultValue)
+    })
   })
 
   describe('4参数柯里化: (a = 1, b = 2, c = 3, d = 4) => a + b + c + d', () => {

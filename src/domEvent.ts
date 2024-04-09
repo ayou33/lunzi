@@ -1,4 +1,4 @@
-import useEvent from "./event";
+import useEvent from './event'
 
 export function supportDomEvent (dom: Element) {
   return useEvent(

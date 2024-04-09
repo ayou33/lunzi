@@ -3,31 +3,54 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/7 18:46
  */
-import { get, post, cancel } from '../src/tools/fetch.axios'
+jest.mock('axios', () => {
+  function fn (options: { signal: AbortSignal }) {
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener('abort', () => {
+        reject(new Error('abort'))
+      })
+      
+      setTimeout(() => {
+        resolve(true)
+      }, 1000)
+    })
+  }
+  
+  fn.interceptors = {
+    request: {
+      use: jest.fn(),
+    },
+  }
+  
+  return fn
+})
 
-const getLocal = get('https://testweb.ddwawa.com/api/user/userinfo', {
-  id: 'get'
+import { get, cancel } from '../src/tools/fetch.axios'
+
+const getLocal = get('/api/test', {
+  id: 'get',
 })
 
 describe('fetch', () => {
-  test('get', async () => {
+  afterAll(() => {
+    jest.clearAllMocks()
+  })
+  
+  test('should get request can be abort', () => {
+    const cb = jest.fn()
     const ecb = jest.fn()
-    await getLocal()
+    
+    const p = getLocal()
+      .then(cb)
       .catch(ecb)
       .finally(() => {
-        expect(ecb).toBeCalledTimes(0)
+        expect(cb).not.toBeCalled()
+        expect(ecb).toBeCalledTimes(1)
+        expect(ecb.mock.lastCall[0].message).toBe('abort')
       })
     
     cancel('get')
-  })
-  
-  test('post', async () => {
-    const ecb = jest.fn()
     
-    await post('https://testweb.ddwawa.com/api/user/userinfo')()
-      .catch(ecb)
-      .finally(() => {
-        expect(ecb).toBeCalledTimes(0)
-      })
+    return p
   })
 })
