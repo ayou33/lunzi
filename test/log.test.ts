@@ -35,10 +35,10 @@ describe('log match', () => {
 
   test('log can be filter by badge', () => {
     const badge = Math.random().toString()
-    log.fitlerBadge(new RegExp(badge))
+    log.filterBadge(new RegExp(badge))
     expect(log.isMatch(badge, Math.random().toString())).toBe(true)
     expect(log.isMatch(Math.random().toString(), Math.random().toString())).toBe(false)
-    log.fitlerBadge(/.*/)
+    log.filterBadge(/.*/)
   })
 
   test('log can be filter by content', () => {

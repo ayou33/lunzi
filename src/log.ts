@@ -116,7 +116,7 @@ class Log {
    * 过滤日志badge
    * @param pattern
    */
-  fitlerBadge (pattern: RegExp) {
+  filterBadge (pattern: RegExp) {
     this._badgePattern = pattern
   }
   

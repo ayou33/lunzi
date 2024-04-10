@@ -11,7 +11,7 @@ interface supportDomEvent {
 
 ### 场景
 
-需要代理dom事件的场景
+ - 需要代理dom事件的场景
 
 ### 使用
 ```typescript

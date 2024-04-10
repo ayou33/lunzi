@@ -7,10 +7,7 @@ import stateQueue from './stateQueue'
 
 type Data = Record<string, unknown>
 
-type XHR = {
-  following?: Array<(err: Error | null, resp?: unknown) => void>
-  abort: () => void
-}
+type Following = Array<(err: Error | null, resp?: unknown) => void>
 
 export type StateFetchConfig = {
   id?: string; // for cancel control
@@ -36,7 +33,7 @@ function parseRequestId (config: StateConfig) {
 
 export default function stateFetch (parallel = 3) {
   const queue = stateQueue(parallel)
-  const running = new Map<string, XHR>()
+  const processing = new Map<string, Following>()
   const cache = new Map<string, {
     expires: number
     resp: unknown | null
@@ -53,15 +50,15 @@ export default function stateFetch (parallel = 3) {
         label: config.label,
         priority: config.priority,
         run: controller => {
-          if (running.has(requestId)) {
-            if (!running.get(requestId)!.following) running.get(requestId)!.following = []
-            
-            running.get(requestId)!.following!.push((err, resp) => {
+          if (processing.has(requestId)) {
+            processing.get(requestId)!.push((err, resp) => {
               if (err) reject(err)
               else resolve(resp as T)
             })
             
             return
+          } else {
+            processing.set(requestId, [])
           }
           
           if (cache.has(requestId)) {
@@ -78,7 +75,7 @@ export default function stateFetch (parallel = 3) {
           })
             .then(resp => {
               resolve(resp)
-              running.get(requestId)?.following?.forEach(cb => cb(null, resp))
+              processing.get(requestId)?.forEach(cb => cb(null, resp))
               
               // 复写缓存
               if (config.expireIn) {
@@ -90,10 +87,10 @@ export default function stateFetch (parallel = 3) {
             })
             .catch((err) => {
               reject(err)
-              running.get(requestId)?.following?.forEach(cb => cb(err))
+              processing.get(requestId)?.forEach(cb => cb(err))
             })
             .finally(() => {
-              running.delete(requestId)
+              processing.delete(requestId)
             })
         },
       })

@@ -25,7 +25,7 @@ jest.mock('axios', () => {
   return fn
 })
 
-import { get, cancel } from '../src/tools/fetch.axios'
+import { get, cancel } from '../../src/tools/fetch.axios'
 
 const getLocal = get('/api/test', {
   id: 'get',

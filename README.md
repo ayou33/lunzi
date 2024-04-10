@@ -6,7 +6,7 @@
 
 | 文件                                                   | 描述             |
 |------------------------------------------------------|----------------|
-| [src/tools/fetch.axios.ts](doc/fetch_axios.md)       | 基于axios的简单分装   |
+| [src/tools/fetch.axios.ts](doc/fetch_axios.md)       | stateFetch与axios的配合使用 |
 | [src/controlledPromise.ts](doc/controlledPromise.md) | 可abort的Promise |
 | [src/curry.ts](doc/curry.md)                         | 柯里化            |
 | [src/domEvent.ts](doc/domEvent.md)                   | dom事件系统        |

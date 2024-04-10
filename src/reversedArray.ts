@@ -89,6 +89,8 @@ export class ReversedArray<T = number> {
 
   update (index: number, d: T) {
     this._arr[this.transfer(index)] = d
+    
+    return this
   }
 }
 

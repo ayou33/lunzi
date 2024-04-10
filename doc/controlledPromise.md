@@ -16,7 +16,7 @@ function controlledPromise<T> (
 
 ### 场景
 
-`controlledPromise` 用于创建一个可以手动终止的 `Promise` 对象。
+ - `controlledPromise` 用于创建一个可以手动终止的 `Promise` 对象。
 
 ### 使用
 
