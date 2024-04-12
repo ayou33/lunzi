@@ -31,10 +31,12 @@ type Task = Required<Omit<TaskMeta, 'run'>> & {
 
 interface StateQueue {
   enqueue: (task: TaskMeta | TaskMeta['run'], runType?: TaskRunType) => string;
+  run: () => void;
   cancel: (idOrLabel: string | string[]) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
   on: (state: QueueState, handler: () => void, oneOff?: boolean) => Function;
+  destroy: () => void;
 }
 ```
 

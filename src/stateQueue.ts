@@ -46,10 +46,12 @@ const LABEL_UNKNOWN = 'unknown'
 
 export interface StateQueue {
   enqueue: (task: TaskMeta | TaskMeta['run'], runType?: TaskRunType) => string;
+  run: () => void;
   cancel: (idOrLabel: string | string[]) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
   on: (state: QueueState, handler: () => void, oneOff?: boolean) => Function;
+  destroy: () => void;
 }
 
 /**
@@ -69,7 +71,7 @@ export default function stateQueue (parallel: number = 1): StateQueue {
   const tasks: Task[] = []
   const running: Task[] = []
 
-  const { on, once, emit } = useEvent()
+  const { on, once, emit, off } = useEvent()
 
   /**
    * Function to manage the execution of tasks.
@@ -228,7 +230,7 @@ export default function stateQueue (parallel: number = 1): StateQueue {
     
     /**
      * abort running tasks
-     * @warn 运行中的任务取消是一个异步操作 当前事件循环周期结束时才会执行
+     * @warn 运行中的任务取消是一个异步操作 当前事件循环周期结束时才会完成操作
       */
     running.forEach(task => {
       if (!shouldKeep(task)) {
@@ -236,12 +238,24 @@ export default function stateQueue (parallel: number = 1): StateQueue {
       }
     })
   }
+  
+  function destroy () {
+    tasks.length = 0
+    
+    running.forEach(task => task.controller.abort())
+    
+    running.length = 0
+    
+    off('*')
+  }
 
   return {
     enqueue,
+    run: next,
     on: onStateChange,
     cancel,
     getTasks: () => tasks,
     getRunningTasks: () => running,
+    destroy,
   }
 }
