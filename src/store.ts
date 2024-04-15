@@ -15,7 +15,7 @@ type Keys = keyof typeof DefaultOptions
  * 配置项将在第一次访问时被锁定
  */
 const options = new Proxy(DefaultOptions, {
-  get (target: {[p in Keys]: string}, key: Keys) {
+  get (target: { [p in Keys]: string }, key: Keys) {
     Object.defineProperty(target, key, {
       writable: false,
     })
@@ -47,9 +47,9 @@ function isPathSelector (key: string) {
   return key.split(options.pathDelimiter).length > 1
 }
 
-function ressolveGroupValue (name: string, p: string | null) {
+function parseGroupValue (name: string, p: string | null) {
   if (p) {
-    const value  = p.match(new RegExp(`(^|${options.valueDelimiter})${name}=([^${options.valueDelimiter}]*)(${options.valueDelimiter}|$)`))
+    const value = p.match(new RegExp(`(^|${options.valueDelimiter})${name}=([^${options.valueDelimiter}]*)(${options.valueDelimiter}|$)`))
     if (value) {
       return value[2]
     }
@@ -57,7 +57,15 @@ function ressolveGroupValue (name: string, p: string | null) {
   return null
 }
 
-function resolvePathValue (paths: string[], p: string | null) {
+function formatGroupValue (name: string, value: unknown, p: string | null) {
+  if (p) {
+    const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
+    return p.replace(reg, `$1${name}=${value}$2`)
+  }
+  return `${name}=${value}`
+}
+
+function parsePathValue (paths: string[], p: string | null) {
   if (p) {
     try {
       const obj = JSON.parse(p)
@@ -70,52 +78,108 @@ function resolvePathValue (paths: string[], p: string | null) {
   return null
 }
 
-function getFrom (target: { getItem: (key: string) => string | null }) {
-  return function (key: string) :string | null {
+function isInsertIndex (key: string) {
+  return /^\[-?\d+]$/.test(key)
+}
+
+function isArrayIndex (key: string) {
+  return /^\d+$/.test(key) || isInsertIndex(key)
+}
+
+function formatPathValue (paths: string[], value: unknown, p: string | null) {
+  if (paths.length === 0) return null
+  
+  try {
+    const obj = JSON.parse(p ?? (isArrayIndex(paths[0]) ? '[]' : '{}'))
+    let current = obj
+    let index = 0
+    let path = paths[index]
+    
+    while (index < paths.length - 1) {
+      if (current[path] === undefined) {
+        current[path] = isArrayIndex(paths[index + 1]) ? [] : {}
+      }
+      
+      current = current[path]
+      path = paths[++index]
+    }
+    
+    if (isInsertIndex(path)) {
+      const position = Number(path.slice(1, -1))
+      const index = position < 0 ? (current.length + position + 1) : position
+      current.splice(index, 0, value)
+    } else {
+      current[path] = value
+    }
+    
+    return JSON.stringify(obj)
+  } catch {
+    return null
+  }
+}
+
+function getBy (target: { getItem: (key: string) => string | null }) {
+  return function (key: string): string | null {
     if (isGroupSelector(key)) {
       const [groupKey, name] = key.split(options.groupDelimiter)
       const value = target.getItem(encode(groupKey))
-      return ressolveGroupValue(name, value)
+      return parseGroupValue(name, value)
     }
     
     if (isPathSelector(key)) {
       const [pathKey, ...paths] = key.split(options.pathDelimiter)
       const p = target.getItem(encode(pathKey))
-      return resolvePathValue(paths, p)
+      return parsePathValue(paths, p)
     }
     
     return target.getItem(encode(key))
   }
 }
 
-export const localGet = getFrom(localStorage)
-
-export function localSet (key: string, value: unknown) {
-  localStorage.setItem(key, JSON.stringify(value))
+function setBy (target: {
+  getItem: (key: string) => string | null,
+  setItem: (key: string, value: string) => void
+}) {
+  return function (key: string, value: unknown) {
+    if (isGroupSelector(key)) {
+      const [groupKey, name] = key.split(options.groupDelimiter)
+      const groupValue = target.getItem(encode(groupKey))
+      target.setItem(encode(groupKey), formatGroupValue(name, value, groupValue))
+      return
+    }
+    
+    if (isPathSelector(key)) {
+      const [pathKey, ...paths] = key.split(options.pathDelimiter)
+      const pathValue = target.getItem(encode(pathKey))
+      const nextValue = formatPathValue(paths, value, pathValue)
+      if (nextValue) {
+        target.setItem(encode(pathKey), nextValue)
+      }
+      return
+    }
+    
+    target.setItem(encode(key), String(value))
+  }
 }
 
+export const localGet = getBy(localStorage)
+
+export const localSet = setBy(localStorage)
+
 export function localRemove (key: string) {
-  localStorage.removeItem(key)
+  localStorage.removeItem(encode(key))
 }
 
 export function localClear () {
   localStorage.clear()
 }
 
-export function sessionGet (key: string) {
-  const value = sessionStorage.getItem(key)
-  if (value) {
-    return JSON.parse(value)
-  }
-  return null
-}
+export const sessionGet = getBy(sessionStorage)
 
-export function sessionSet (key: string, value: unknown) {
-  sessionStorage.setItem(key, JSON.stringify(value))
-}
+export const sessionSet = setBy(sessionStorage)
 
 export function sessionRemove (key: string) {
-  sessionStorage.removeItem(key)
+  sessionStorage.removeItem(encode(key))
 }
 
 export function sessionClear () {
