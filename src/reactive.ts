@@ -1,5 +1,5 @@
 /**
- * File: react.ts of LunZi
+ * File: reactive.ts of LunZi
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/16 17:11
  * code from https://dev.to/ryansolid/building-a-reactive-library-from-scratch-1i0p
@@ -32,7 +32,7 @@ export function createSignal<T> (value: T) {
       sub.effect()
     }
   }
-  return [read, write]
+  return [read, write] as const
 }
 
 function cleanup (effectCtx: EffectContext) {
@@ -76,4 +76,6 @@ export function createEffect (fn: () => void) {
   }
   
   effect()
+  
+  return () => cleanup(effectCtx)
 }

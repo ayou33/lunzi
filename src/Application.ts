@@ -3,6 +3,8 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/16 10:33
  */
+import { createSignal } from './reactive'
+
 enum Mode {
   GUEST,
   USER,
@@ -10,51 +12,66 @@ enum Mode {
   MANAGER,
 }
 
+function isMobile () {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry/i.test(navigator.userAgent)
+}
+
 export default abstract class Application<K, R, I> {
+  readonly href: string
+  
   readonly kernel: K
   readonly router?: R
   readonly i18n?: I
-  mode: Mode = Mode.USER
   
-  protected constructor (kernel: K, router?: R, i18n?: I) {
+  readonly logged: () => boolean
+  readonly login: () => void
+  readonly logout: () => void
+  
+  readonly mode: () => Mode
+  readonly setMode: (mode: Mode) => void
+  
+  static readonly flags = {
+    get isDev () {
+      return process.env.NODE_ENV === 'development'
+    },
+    get isTest () {
+      return process.env.NODE_ENV === 'test'
+    },
+    get isPreview () {
+      return process.env.NODE_ENV === 'preview'
+    },
+    get isProd () {
+      return process.env.NODE_ENV === 'production'
+    },
+    get isAndroid () {
+      return /Android/i.test(navigator.userAgent)
+    },
+    get isIOS () {
+      return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    },
+    get isMobile () {
+      return isMobile()
+    },
+    get isPC () {
+      return !isMobile()
+    },
+  }
+  
+  constructor (kernel: K, router?: R, i18n?: I) {
+    this.href = location.href
     this.kernel = kernel
     this.router = router
     this.i18n = i18n
-  }
-  
-  static isDev () {
-    return process.env.NODE_ENV === 'development'
-  }
-  
-  static isTest () {
-    return process.env.NODE_ENV === 'test'
-  }
-  
-  static isPreview () {
-    return process.env.NODE_ENV === 'preview'
-  }
-  
-  createSignal () {}
-  
-  createEffect () {}
-  
-  static isProd () {
-    return process.env.NODE_ENV === 'production'
-  }
-  
-  abstract start (beforeStart?: () => Promise<boolean>): void
-}
-
-class MyApplication<K, R, I> extends Application<K, R, I> implements Application<K, R, I> {
-  constructor (kernel: K, router: R, i18n: I) {
-    super(kernel, router, i18n)
     
-    this.mode = Mode.USER
+    const [mode, setMode] = createSignal(Mode.GUEST)
+    this.mode = mode
+    this.setMode = setMode
+    
+    const [logged, setLogged] = createSignal(false)
+    this.logged = logged
+    this.login = () => setLogged(true)
+    this.logout = () => setLogged(false)
   }
   
-  start () {}
+  abstract start (beforeStart?: () => void): void
 }
-
-const app = new MyApplication({}, {}, {})
-
-app.start()
