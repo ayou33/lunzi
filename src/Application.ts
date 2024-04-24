@@ -5,7 +5,7 @@
  */
 import { createSignal } from './reactive'
 
-enum Mode {
+export enum Mode {
   GUEST,
   USER,
   REVIEWER,
@@ -30,7 +30,7 @@ export default abstract class Application<K, R, I> {
   readonly mode: () => Mode
   readonly setMode: (mode: Mode) => void
   
-  static readonly flags = {
+  flags = {
     get isDev () {
       return process.env.NODE_ENV === 'development'
     },

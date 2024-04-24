@@ -51,9 +51,10 @@ export function createEffect (fn: () => void) {
    *  考虑以下场景
    *  const [a] = createSignal(1)
    *  const [b] = createSignal(2)
+   *  const [condition] = createSignal(true)
    *
    *  createEffect(() => {
-   *    if (condition) {
+   *    if (condition()) {
    *      console.log(a())
    *    } else {
    *      console.log(b())
