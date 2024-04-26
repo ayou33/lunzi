@@ -50,7 +50,7 @@ export interface StateQueue {
   cancel: (idOrLabel: string | string[]) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
-  on: (state: QueueState, handler: () => void, oneOff?: boolean) => Function;
+  on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => Function;
   destroy: () => void;
 }
 
@@ -67,7 +67,7 @@ function makeId (): string {
  * @param {number} parallel - The number of tasks that can run in parallel.
  * @returns {Object} The state queue object.
  */
-export default function stateQueue (parallel: number = 1): StateQueue {
+export function stateQueue (parallel: number = 1): StateQueue {
   const tasks: Task[] = []
   const running: Task[] = []
 
@@ -96,11 +96,13 @@ export default function stateQueue (parallel: number = 1): StateQueue {
    * @returns {Object} The built task object.
    */
   function buildTaskObject (task: Parameters<typeof enqueue>[0]): Task {
-    const run = 'function' === typeof task ? task : task.run
+    const isRun = 'function' === typeof task
+    const run = isRun ? task : task.run
     const controller = new AbortController()
+    const id = isRun ? makeId() : (task.id || makeId())
     
     return {
-      id: makeId(),
+      id,
       priority: DEFAULT_PRIORITY,
       label: LABEL_UNKNOWN,
       ...task,
@@ -113,7 +115,7 @@ export default function stateQueue (parallel: number = 1): StateQueue {
              * 或者队列任务在用户任务执行时被取消的不一致性
              */
             resolve(await run(controller))
-            interrupt()
+            interrupt(id)
           } catch (error) {
             reject(error as Error)
           }
@@ -132,7 +134,7 @@ export default function stateQueue (parallel: number = 1): StateQueue {
   function run (task: Task) {
     running.push(task)
     
-    emitRunning()
+    emitRunning(task.id)
 
     task
       .run()
@@ -167,8 +169,8 @@ export default function stateQueue (parallel: number = 1): StateQueue {
   /**
    * Function to emit an interrupt event.
    */
-  function interrupt () {
-    emit(stateEvent(QueueState.INTERRUPT))
+  function interrupt (id: string) {
+    emit(stateEvent(QueueState.INTERRUPT), id)
   }
 
   /**
@@ -188,8 +190,8 @@ export default function stateQueue (parallel: number = 1): StateQueue {
   /**
    * Function to emit a running event.
    */
-  function emitRunning () {
-    emit(stateEvent(QueueState.RUNNING))
+  function emitRunning (id: string) {
+    emit(stateEvent(QueueState.RUNNING), id)
   }
 
   /**
@@ -208,7 +210,7 @@ export default function stateQueue (parallel: number = 1): StateQueue {
    * @param {boolean} oneOff - Flag to indicate if the handler should be executed only once.
    * @returns {Function} The function to unsubscribe.
    */
-  function onStateChange (state: QueueState, handler: () => void, oneOff: boolean = false): Function {
+  function onStateChange <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff: boolean = false): Function {
     return (oneOff ? once : on)(stateEvent(state), handler)
   }
 
@@ -259,3 +261,5 @@ export default function stateQueue (parallel: number = 1): StateQueue {
     destroy,
   }
 }
+
+export default stateQueue

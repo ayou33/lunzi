@@ -3,7 +3,7 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/8 14:29
  */
-export default function controlledPromise<T> (
+export function controlledPromise<T> (
   executor?: (
     resolve: (value: T | PromiseLike<T>) => void,
     reject: (reason?: string | Error) => void,
@@ -26,3 +26,5 @@ export default function controlledPromise<T> (
   
   return [promise, abort] as const
 }
+
+export default controlledPromise

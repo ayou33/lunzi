@@ -31,7 +31,7 @@ function parseRequestId (config: StateConfig) {
   return config.url + searchParams.toString()
 }
 
-export default function stateFetch (parallel = 3) {
+export function stateFetch (parallel = 3) {
   const queue = stateQueue(parallel)
   const processing = new Map<string, Following>()
   const cache = new Map<string, {
@@ -107,3 +107,5 @@ export default function stateFetch (parallel = 3) {
     on: queue.on,
   }
 }
+
+export default stateFetch
