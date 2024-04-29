@@ -135,7 +135,7 @@ export function useEvent (
         for (let i = 0, el = __events.length; i < el; i++) {
           const record = __events[i]
           if (
-            record.name === name &&
+            (name === '*' || record.name === name) &&
             /**
              * 不指定命名空间，会删除所有name相同的注册事件
              */

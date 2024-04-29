@@ -488,4 +488,21 @@ describe('取消所有订阅', () => {
     off('*')
     expect(listenerCount()).toBe(0)
   })
+  
+  test('通过命名空间取消订阅', () => {
+    const { on, off, listenerCount } = useEvent()
+    const event = 'event'
+    const ns = 'ns'
+    const ns2 = 'ns2'
+    const handler = () => {}
+
+    expect(listenerCount()).toBe(0)
+    on(`${event}.${ns}`, handler)
+    on(`${event}.${ns2}`, handler)
+    expect(listenerCount()).toBe(2)
+
+    off(`*.${ns}`)
+    off(`*.${ns2}`)
+    expect(listenerCount()).toBe(0)
+  })
 })
