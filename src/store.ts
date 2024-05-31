@@ -218,10 +218,10 @@ export function cookieClear () {
   }
 }
 
-const memory = new Map()
+const memory = new Map<string, unknown>()
 
-export function memoryGet (key: string) {
-  return memory.get(key)
+export function memoryGet<T> (key: string) {
+  return memory.get(key) as T
 }
 
 export function memorySet (key: string, value: unknown) {
