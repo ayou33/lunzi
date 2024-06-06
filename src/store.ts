@@ -57,14 +57,6 @@ function parseGroupValue (name: string, p: string | null) {
   return null
 }
 
-function formatGroupValue (name: string, value: unknown, p: string | null) {
-  if (p) {
-    const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
-    return p.replace(reg, `$1${name}=${value}$2`)
-  }
-  return `${name}=${value}`
-}
-
 function parsePathValue (paths: string[], p: string | null) {
   if (p) {
     try {
@@ -76,6 +68,24 @@ function parsePathValue (paths: string[], p: string | null) {
   }
   
   return null
+}
+
+function getBy (target: { getItem: (key: string) => string | null }) {
+  return function (key: string): string | null {
+    if (isGroupSelector(key)) {
+      const [groupKey, name] = key.split(options.groupDelimiter)
+      const value = target.getItem(encode(groupKey))
+      return parseGroupValue(name, value)
+    }
+    
+    if (isPathSelector(key)) {
+      const [pathKey, ...paths] = key.split(options.pathDelimiter)
+      const p = target.getItem(encode(pathKey))
+      return parsePathValue(paths, p)
+    }
+    
+    return target.getItem(encode(key))
+  }
 }
 
 function isInsertIndex (key: string) {
@@ -118,22 +128,12 @@ function formatPathValue (paths: string[], value: unknown, p: string | null) {
   }
 }
 
-function getBy (target: { getItem: (key: string) => string | null }) {
-  return function (key: string): string | null {
-    if (isGroupSelector(key)) {
-      const [groupKey, name] = key.split(options.groupDelimiter)
-      const value = target.getItem(encode(groupKey))
-      return parseGroupValue(name, value)
-    }
-    
-    if (isPathSelector(key)) {
-      const [pathKey, ...paths] = key.split(options.pathDelimiter)
-      const p = target.getItem(encode(pathKey))
-      return parsePathValue(paths, p)
-    }
-    
-    return target.getItem(encode(key))
+function formatGroupValue (name: string, value: unknown, p: string | null) {
+  if (p) {
+    const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
+    return p.replace(reg, `$1${name}=${value}$2`)
   }
+  return `${name}=${value}`
 }
 
 function setBy (target: {
@@ -162,13 +162,74 @@ function setBy (target: {
   }
 }
 
+function dropGroupValue (name: string, p: string) {
+  const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
+  return p.replace(reg, '')
+}
+
+function removePath (paths: string[], p: string) {
+  const obj = JSON.parse(p)
+  let current = obj
+  let index = 0
+  let pathKey = paths[index]
+  
+  while (index < paths.length - 1) {
+    if (current[pathKey] === undefined) {
+      return
+    }
+    
+    current = current[pathKey]
+    pathKey = paths[++index]
+  }
+  
+  if (isInsertIndex(pathKey)) {
+    const position = Number(pathKey.slice(1, -1))
+    const index = position < 0 ? (current.length + position + 1) : position
+    current.splice(index, 1)
+  } else {
+    delete current[pathKey]
+  }
+  
+  return JSON.stringify(obj)
+}
+
+function removeBy (target: {
+  removeItem: (key: string) => void,
+  getItem: (key: string) => string | null,
+  setItem: (key: string, value: string) => void
+}) {
+  return function (key: string) {
+    if (isGroupSelector(key)) {
+      const [groupKey, name] = key.split(options.groupDelimiter)
+      const groupValue = target.getItem(encode(groupKey))
+      if (groupValue) {
+        target.setItem(encode(groupKey), dropGroupValue(name, groupValue))
+      }
+      return
+    }
+    
+    if (isPathSelector(key)) {
+      const [pathKey, ...paths] = key.split(options.pathDelimiter)
+      const p = target.getItem(encode(pathKey))
+      
+      if (p) {
+        const nextValue = removePath(paths, p)
+        if (nextValue) {
+          target.setItem(encode(pathKey), nextValue)
+        }
+      }
+      return
+    }
+    
+    target.removeItem(encode(key))
+  }
+}
+
 export const localGet = getBy(localStorage)
 
 export const localSet = setBy(localStorage)
 
-export function localRemove (key: string) {
-  localStorage.removeItem(encode(key))
-}
+export const localRemove = removeBy(localStorage)
 
 export function localClear () {
   localStorage.clear()
