@@ -158,7 +158,7 @@ function setBy (target: {
       return
     }
     
-    target.setItem(encode(key), String(value))
+    target.setItem(encode(key), JSON.stringify(value))
   }
 }
 
