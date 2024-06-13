@@ -3,11 +3,14 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/7 15:15
  */
+import { logFor } from '../../src/common/log'
 import stateQueue from './stateQueue'
 
 type Data = Record<string, unknown>
 
 type Following = Array<(err: Error | null, resp?: unknown) => void>
+
+const log = logFor('stateFetch')
 
 export type StateFetchConfig = {
   id?: string; // for cancel control
@@ -50,6 +53,7 @@ export function stateFetch (parallel = 3) {
         label: config.label,
         priority: config.priority,
         run: controller => {
+          log('run task', requestId)
           if (processing.has(requestId)) {
             processing.get(requestId)!.push((err, resp) => {
               if (err) reject(err)
@@ -65,6 +69,8 @@ export function stateFetch (parallel = 3) {
             const { expires, resp } = cache.get(requestId)!
             // 缓存命中 直接返回
             if (resp && Date.now() < expires) {
+              processing.get(requestId)?.forEach(cb => cb(null, resp))
+              processing.delete(requestId)
               return resolve(resp as T)
             }
           }
