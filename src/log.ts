@@ -25,7 +25,7 @@ function createPrinter (log: Log, name?: string, cssText?: string): Printer {
   function print (method: 'log' | 'warn' | 'error', ...args: any[]) {
     if (context.isEnable() && context.isMatch(badge, args.toString())) {
       if (badge.trim()) {
-        console[method](`%c${badge}`, style, ...args)
+        console[method](`%c<${badge}>`, style, ...args)
         context.report(method, badge, ...args)
       } else {
         console[method](...args)

@@ -1,4 +1,10 @@
-export function parseEventName (name: string) {
+type EventName = string | string[]
+
+export function parseEventName (name: EventName) {
+  if (Array.isArray(name)) {
+    return parseEventName(name.join(' '))
+  }
+  
   return name.trim().split(/^|\s+/).map(n => {
     const names = n.split('.')
     const name = names[0].trim()
@@ -14,7 +20,7 @@ export function parseEventName (name: string) {
   }).reduce((a, b) => a.concat(b), [])
 }
 
-export function useEventName (event: string, use: (name: string, type: string) => void) {
+export function useEventName (event: EventName, use: (name: string, type: string) => void) {
   parseEventName(event).map(event => {
     if (event.name) use(event.name, event.type)
   })
@@ -60,7 +66,7 @@ export function useEvent (
    * @param listener function (e: Event, ...data) => void
    * @param options boolean | object
    */
-  function on (event: string, listener: EventListener, options?: EventOptions) {
+  function on (event: EventName, listener: EventListener, options?: EventOptions) {
     const contextedListener = contextListener(listener)
     
     useEventName(event, (name, type) => {
@@ -111,7 +117,7 @@ export function useEvent (
    * @param listener
    * @param options
    */
-  function once (event: string, listener: EventListener, options?: EventOptions) {
+  function once (event: EventName, listener: EventListener, options?: EventOptions) {
     return on(event, function handler (e: Event, ...dataSet: any[]) {
       listener(e, ...dataSet)
       off(event, handler)
@@ -126,7 +132,7 @@ export function useEvent (
    * @param event
    * @param listener
    */
-  function off (event: string, listener?: EventListener) {
+  function off (event: EventName, listener?: EventListener) {
     if (event === '*') {
       __events.length = 0
     } else {
@@ -160,7 +166,7 @@ export function useEvent (
    * @param event
    * @param dataSet
    */
-  function emit (event: string, ...dataSet: any[]) {
+  function emit (event: EventName, ...dataSet: any[]) {
     useEventName(event, (name, type) => {
       const e = new CustomEvent(name)
       for (let i = 0, el = __events.length; i < el; i++) {
@@ -181,7 +187,7 @@ export function useEvent (
           (type === '' || record.type === type)
         ) {
           record.listener(e, ...dataSet)
-          onPub?.(event, e, ...dataSet)
+          onPub?.(name, e, ...dataSet)
         }
       }
     })
@@ -191,7 +197,7 @@ export function useEvent (
    * 获取指定或所有事件的有效的绑定记录总数
    * @param event
    */
-  function listenerCount (event?: string) {
+  function listenerCount (event?: EventName) {
     if (event) {
       return __events
         .filter(record => parseEventName(event)
