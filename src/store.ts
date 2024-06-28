@@ -140,7 +140,7 @@ function setBy (target: {
   getItem: (key: string) => string | null,
   setItem: (key: string, value: string) => void
 }) {
-  return function (key: string, value: unknown) {
+  return function (key: string, value: string) {
     if (isGroupSelector(key)) {
       const [groupKey, name] = key.split(options.groupDelimiter)
       const groupValue = target.getItem(encode(groupKey))
@@ -158,7 +158,7 @@ function setBy (target: {
       return
     }
     
-    target.setItem(encode(key), JSON.stringify(value))
+    target.setItem(encode(key), value)
   }
 }
 
