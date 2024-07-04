@@ -47,7 +47,7 @@ const LABEL_UNKNOWN = 'unknown'
 export interface StateQueue {
   enqueue: (task: TaskMeta | TaskMeta['run'], runType?: TaskRunType) => string;
   run: () => void;
-  cancel: (idOrLabel: string | string[]) => void;
+  cancel: (idOrLabel: string | string[], reason?: string) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
   on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => Function;
@@ -217,8 +217,9 @@ export function stateQueue (parallel: number = 1): StateQueue {
   /**
    * Function to cancel a task.
    * @param {string|string[]} idOrLabel - The ID or label of the task to be cancelled.
+   * @param reason
    */
-  function cancel (idOrLabel: string | string[]) {
+  function cancel (idOrLabel: string | string[], reason?: string) {
     // cancel queued tasks
     const shouldKeep = 'string' === typeof idOrLabel
       ? ({ id, label }: Pick<Task, 'id' | 'label'>) => !(id == idOrLabel || label === idOrLabel)
@@ -236,7 +237,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
       */
     running.forEach(task => {
       if (!shouldKeep(task)) {
-        task.controller.abort()
+        task.controller.abort(reason)
       }
     })
   }

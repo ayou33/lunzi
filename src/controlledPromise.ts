@@ -13,8 +13,9 @@ export function controlledPromise<T> (
   const ctrl = controller ?? new AbortController()
   
   const promise = new Promise<T>((resolve, reject) => {
-    ctrl.signal.addEventListener('abort', () => {
-      reject(new Error('Promise aborted'))
+    ctrl.signal.addEventListener('abort', function onAbort () {
+      reject('Promise aborted')
+      ctrl.signal.removeEventListener('abort', onAbort)
     })
     
     executor?.(resolve, reject)

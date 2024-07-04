@@ -17,6 +17,7 @@ export type StateFetchConfig = {
   label?: string; // for batch cancel control
   priority?: number; // for queue order control
   expireIn?: number; // for cache control; cache duration(ms)
+  individual?: boolean; // for repeat control
 }
 
 type StateConfig = {
@@ -36,11 +37,19 @@ function parseRequestId (config: StateConfig) {
 
 export function stateFetch (parallel = 3) {
   const queue = stateQueue(parallel)
+  /**
+   * requestId相同的请求会被合并处理
+   */
   const processing = new Map<string, Following>()
   const cache = new Map<string, {
     expires: number
     resp: unknown | null
   }>()
+  
+  function respond (requestId: string, error: Error | null = null, result?: unknown) {
+    processing.get(requestId)?.forEach(cb => cb(error, result))
+    processing.delete(requestId)
+  }
   
   function send<T, C extends StateConfig> (fetch: (config: C) => Promise<T>, config: C) {
     return new Promise<T>((resolve, reject) => {
@@ -53,24 +62,33 @@ export function stateFetch (parallel = 3) {
         label: config.label,
         priority: config.priority,
         run: controller => {
+          controller.signal.addEventListener('abort', function onAbort () {
+            log('abort task', requestId)
+            const error = new Error('Request aborted')
+            reject(error)
+            respond(requestId, error)
+            controller.signal.removeEventListener('abort', onAbort)
+          })
+          
           log('run task', requestId)
-          if (processing.has(requestId)) {
-            processing.get(requestId)!.push((err, resp) => {
-              if (err) reject(err)
-              else resolve(resp as T)
-            })
-            
-            return
-          } else {
-            processing.set(requestId, [])
+          if (!config.individual) {
+            if (processing.has(requestId)) {
+              processing.get(requestId)!.push((err, resp) => {
+                if (err) reject(err)
+                else resolve(resp as T)
+              })
+              
+              return
+            } else {
+              processing.set(requestId, [])
+            }
           }
           
           if (cache.has(requestId)) {
             const { expires, resp } = cache.get(requestId)!
             // 缓存命中 直接返回
             if (resp && Date.now() < expires) {
-              processing.get(requestId)?.forEach(cb => cb(null, resp))
-              processing.delete(requestId)
+              respond(requestId, null, resp)
               return resolve(resp as T)
             }
           }
@@ -81,7 +99,7 @@ export function stateFetch (parallel = 3) {
           })
             .then(resp => {
               resolve(resp)
-              processing.get(requestId)?.forEach(cb => cb(null, resp))
+              respond(requestId, null, resp)
               
               // 复写缓存
               if (config.expireIn) {
@@ -93,18 +111,15 @@ export function stateFetch (parallel = 3) {
             })
             .catch((err) => {
               reject(err)
-              processing.get(requestId)?.forEach(cb => cb(err))
-            })
-            .finally(() => {
-              processing.delete(requestId)
+              respond(requestId, err)
             })
         },
       })
     })
   }
   
-  function cancel (idOrLabel: string | string[]) {
-    queue.cancel(idOrLabel)
+  function cancel (idOrLabel: string | string[], reason?: string) {
+    queue.cancel(idOrLabel, reason)
   }
   
   return {
