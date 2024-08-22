@@ -231,6 +231,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
 
     tasks.push(...left)
     
+    let taskAborted = false
     /**
      * abort running tasks
      * @warn 运行中的任务取消是一个异步操作 当前事件循环周期结束时才会完成操作
@@ -238,8 +239,13 @@ export function stateQueue (parallel: number = 1): StateQueue {
     running.forEach(task => {
       if (!shouldKeep(task)) {
         task.controller.abort(reason)
+        taskAborted = true
       }
     })
+    
+    if (taskAborted) {
+      next()
+    }
   }
   
   function destroy () {
