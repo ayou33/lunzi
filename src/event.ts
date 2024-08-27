@@ -1,4 +1,4 @@
-type EventName = string | string[]
+export type EventName = string | string[]
 
 export function parseEventName (name: EventName) {
   if (Array.isArray(name)) {
