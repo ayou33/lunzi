@@ -1,6 +1,11 @@
 export type EventName = string | string[]
 
-export function parseEventName (name: EventName) {
+export type EventType = {
+  name: string;
+  type: string;
+}
+
+export function parseEventName (name: EventName): EventType[] {
   if (Array.isArray(name)) {
     return parseEventName(name.join(' '))
   }
