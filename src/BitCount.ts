@@ -5,10 +5,11 @@
  */
 class BitCount {
   readonly radix: number
+  timeout?: () => void
   parent: BitCount | null
   _value: number = 0
   
-  constructor (value: number, parent: BitCount | null = null, radix = 10) {
+  constructor (value: number, parent: BitCount | null = null, radix = 10, timeout?: () => void) {
     if (radix < 2) {
       throw new Error('Radix must be greater than 1')
     }
@@ -16,6 +17,7 @@ class BitCount {
     this.radix = radix
     this.parent = parent
     this._value = value
+    this.timeout = timeout
     
     this.carryCheck(this._value)
   }
@@ -60,6 +62,10 @@ class BitCount {
       } else {
         this._value = nextValue
       }
+    }
+    
+    if (nextValue === 0 && !this.parent) {
+      this.timeout?.()
     }
     
     return this
