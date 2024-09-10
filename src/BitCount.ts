@@ -53,7 +53,7 @@ class BitCount {
     
     // 借位
     if (nextValue < 0) {
-      if (this.parent && this.parent._value > 0) {
+      if (this.parent) {
         this._value = this.radix + nextValue
         
         this.parent.add(-1)
