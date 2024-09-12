@@ -5,11 +5,11 @@
  */
 class BitCount {
   readonly radix: number
-  timeout?: () => void
+  onNil?: () => void
   parent: BitCount | null
   _value: number = 0
   
-  constructor (value: number, parent: BitCount | null = null, radix = 10, timeout?: () => void) {
+  constructor (value: number, parent: BitCount | null = null, radix = 10, onNil?: () => void) {
     if (radix < 2) {
       throw new Error('Radix must be greater than 1')
     }
@@ -17,7 +17,7 @@ class BitCount {
     this.radix = radix
     this.parent = parent
     this._value = value
-    this.timeout = timeout
+    this.onNil = onNil
     
     this.carryCheck(this._value)
   }
@@ -39,10 +39,28 @@ class BitCount {
     }
   }
   
+  private checkNil () {
+    let isNil = true
+    let parent = this.parent
+    while (parent) {
+      if (parent._value !== 0) {
+        isNil = false
+        break
+      }
+      parent = parent.parent
+    }
+    
+    isNil && this.onNil?.()
+  }
+  
   add (value: number): BitCount {
     const nextValue = this._value + value
     
     if (nextValue < this.radix && nextValue >= 0) {
+      
+      if (nextValue === 0) {
+        this.checkNil()
+      }
       
       this._value = nextValue
       return this
@@ -53,7 +71,7 @@ class BitCount {
     
     // 借位
     if (nextValue < 0) {
-      if (this.parent) {
+      if (this.parent && this.parent._value > 0) {
         this._value = this.radix + nextValue
         
         this.parent.add(-1)
@@ -62,10 +80,6 @@ class BitCount {
       } else {
         this._value = nextValue
       }
-    }
-    
-    if (nextValue === 0 && !this.parent) {
-      this.timeout?.()
     }
     
     return this
