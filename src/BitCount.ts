@@ -3,94 +3,98 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/9/2 11:49
  */
+export type BitCountOptions = {
+  radix: number;
+  target?: number;
+  onComplete?: () => void
+}
+
 class BitCount {
-  readonly radix: number
-  onNil?: () => void
+  readonly options: BitCountOptions;
   parent: BitCount | null
   _value: number = 0
+  _number: number = 0
   
-  constructor (value: number, parent: BitCount | null = null, radix = 10, onNil?: () => void) {
-    if (radix < 2) {
+  constructor (number: number, parent: BitCount | null = null, options: {
+    radix: number;
+    target?: number;
+    onComplete?: () => void
+  }) {
+    this.options = Object.assign({
+      radix: 10,
+      target: 0,
+    }, options)
+    
+    if (this.options.radix < 2) {
       throw new Error('Radix must be greater than 1')
     }
     
-    this.radix = radix
-    this.parent = parent
-    this._value = value
-    this.onNil = onNil
+    if (number < 0) {
+      throw new Error('Number must be a non-negative integer')
+    }
     
-    this.carryCheck(this._value)
+    this.parent = parent
+    this._number = number
+    this.carryCheck(this._number)
+    this._value = this.value()
+    this.checkValue()
+  }
+  
+  private checkValue () {
+    if (this._value === this.options.target) {
+      this.options.onComplete?.()
+    }
   }
   
   private carryCheck (next: number) {
-    if (next >= this.radix) {
-      this._value = next % this.radix
+    if (next >= this.options.radix) {
+      this._number = next % this.options.radix
       if (this.parent) {
         this.parent.add(1)
       } else {
-        this.parent = new BitCount(1, null, this.radix)
+        this.parent = new BitCount(1, null, {
+          radix: this.options.radix,
+          target: this.options.target,
+        })
       }
     }
   }
   
-  private parentClip () {
-    if (this.parent && this.parent._value <= 0 && !this.parent.parent) {
-      this.parent = null
-    }
-  }
-  
-  private checkNil () {
-    let isNil = true
-    let parent = this.parent
-    while (parent) {
-      if (parent._value !== 0) {
-        isNil = false
-        break
-      }
-      parent = parent.parent
-    }
+  add (step: number): BitCount {
+    this._value += step
     
-    isNil && this.onNil?.()
-  }
-  
-  add (value: number): BitCount {
-    const nextValue = this._value + value
+    this.checkValue()
     
-    if (nextValue < this.radix && nextValue >= 0) {
-      
-      if (nextValue === 0) {
-        this.checkNil()
-      }
-      
-      this._value = nextValue
-      return this
-    }
+    const number = this._number + step
     
-    // 进位
-    this.carryCheck(nextValue)
-    
-    // 借位
-    if (nextValue < 0) {
-      if (this.parent && this.parent._value > 0) {
-        this._value = this.radix + nextValue
-        
-        this.parent.add(-1)
-        
-        this.parentClip()
+    if (number < this.options.radix) {
+      if (number >= 0) {
+        this._number = number
+        return this
       } else {
-        this._value = nextValue
+        // 借位
+        if (this.parent && this.parent._value > 0) {
+          this._number = this.options.radix + number
+          
+          this.parent.add(-1)
+        } else {
+          this._number = number
+        }
       }
+    } else {
+      // 进位
+      this.carryCheck(number)
     }
     
     return this
   }
   
   values () {
-    const values: number[] = [this._value]
+    const values: number[] = [this._number]
     let parent = this.parent
     
     while (parent) {
-      values.unshift(parent._value)
+      values.unshift(parent._number)
       parent = parent.parent
     }
     
@@ -98,18 +102,18 @@ class BitCount {
   }
   
   bitValue () {
-    return this._value
+    return this._number
   }
   
   value (): number {
-    let value = this._value
+    let value = this._number
     
     let radix = 1
     let parent = this.parent
     
     while (parent) {
-      radix *= parent.radix
-      value += parent._value * radix
+      radix *= parent.options.radix
+      value += parent._number * radix
       parent = parent.parent
     }
     

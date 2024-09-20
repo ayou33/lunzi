@@ -222,7 +222,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
   function cancel (idOrLabel: string | string[], reason?: string) {
     // cancel queued tasks
     const shouldKeep = 'string' === typeof idOrLabel
-      ? ({ id, label }: Pick<Task, 'id' | 'label'>) => !(id == idOrLabel || label === idOrLabel)
+      ? ({ id, label }: Pick<Task, 'id' | 'label'>) => !(id === idOrLabel || label === idOrLabel)
       : ({ id, label }: Pick<Task, 'id' | 'label'>) => !(idOrLabel.includes(id) || idOrLabel.includes(label))
 
     const left = tasks.filter(shouldKeep)
