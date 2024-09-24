@@ -117,6 +117,10 @@ class BitCount {
       parent = parent.parent
     }
     
+    if (Number.isNaN(value)) {
+      throw new Error('Value is NaN, please make sure that the radix and the number are valid integers')
+    }
+    
     return value
   }
 }
