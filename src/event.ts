@@ -70,6 +70,7 @@ export function useEvent (
    * @param event string 'name.namespace1.namespace2 name2.namespace1.namespace2'
    * @param listener function (e: Event, ...data) => void
    * @param options boolean | object
+   * @returns () => void 解绑函数
    */
   function on (event: EventName, listener: EventListener, options?: EventOptions) {
     const contextedListener = contextListener(listener)
