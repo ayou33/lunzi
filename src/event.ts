@@ -35,7 +35,7 @@ export type EventListener = (e: Event, ...dataSet: any[]) => void
 
 export type EventOptions = AddEventListenerOptions | boolean
 
-export function contextListener (listener: (e: Event, ...dataSet: any[]) => void) {
+export function makeListener (listener: (e: Event, ...dataSet: any[]) => void) {
   return (e: Event, ...dataSet: any[]) => {
     listener(e, ...dataSet)
   }
@@ -73,7 +73,7 @@ export function useEvent (
    * @returns () => void 解绑函数
    */
   function on (event: EventName, listener: EventListener, options?: EventOptions) {
-    const contextedListener = contextListener(listener)
+    const scopedListener = makeListener(listener)
     
     useEventName(event, (name, type) => {
       for (let i = 0, el = __events.length; i < el; i++) {
@@ -89,9 +89,9 @@ export function useEvent (
         ) {
           // console.log('skip', name, type)
           onRemove?.(record.name, record.listener, record.options)
-          record.listener = contextedListener
+          record.listener = scopedListener
           record.options = options
-          onSub?.(record.name, contextedListener, options)
+          onSub?.(record.name, scopedListener, options)
           return
         }
       }
@@ -99,12 +99,12 @@ export function useEvent (
       __events.push({
         name,
         type,
-        listener: contextedListener,
+        listener: scopedListener,
         rawListener: listener,
         options,
       })
       
-      onSub?.(name, contextedListener, options)
+      onSub?.(name, scopedListener, options)
       
       if (__events.length >= MAX_LISTENERS) {
         throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
