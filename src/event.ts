@@ -108,6 +108,8 @@ export function useEvent (
       
       if (__events.length >= MAX_LISTENERS) {
         throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
+      } else if (__events.length / MAX_LISTENERS > 0.9) {
+        console.warn(`The number of events is too large: ${__events.length}`)
       }
     })
     

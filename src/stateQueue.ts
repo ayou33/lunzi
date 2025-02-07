@@ -59,7 +59,7 @@ export interface StateQueue {
  * @returns {string} A random string.
  */
 function makeId (): string {
-  return (Math.random() + Math.random()).toString(36).slice(2)
+  return '0' + (Math.random() + Math.random()).toString(36).slice(2)
 }
 
 /**
@@ -96,16 +96,23 @@ export function stateQueue (parallel: number = 1): StateQueue {
    * @returns {Object} The built task object.
    */
   function buildTaskObject (task: Parameters<typeof enqueue>[0]): Task {
-    const isRun = 'function' === typeof task
-    const run = isRun ? task : task.run
     const controller = new AbortController()
-    const id = isRun ? makeId() : (task.id || makeId())
+    const isRunnable = 'function' === typeof task
+    const run = isRunnable ? task : task.run
+    const id = isRunnable ? makeId() : (task.id || makeId())
     
-    return {
-      id,
+    const meta = isRunnable ? {
       priority: DEFAULT_PRIORITY,
       label: LABEL_UNKNOWN,
-      ...task,
+      id,
+    } : {
+      priority: task.priority ?? DEFAULT_PRIORITY,
+      label: task.label ?? LABEL_UNKNOWN,
+      id,
+    }
+    
+    return {
+      ...meta,
       run () {
         const [promise] = controlledPromise(async (resolve, reject) => {
           try {
