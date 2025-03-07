@@ -130,8 +130,12 @@ function formatPathValue (paths: string[], value: unknown, p: string | null) {
 
 function formatGroupValue (name: string, value: unknown, p: string | null) {
   if (p) {
-    const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
-    return p.replace(reg, `$1${name}=${value}$2`)
+    if (p.includes(`${name}=`)) {
+      const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
+      return p.replace(reg, `$1${name}=${value}$2`)
+    } else {
+      return `${p}${options.valueDelimiter}${name}=${value}`
+    }
   }
   return `${name}=${value}`
 }

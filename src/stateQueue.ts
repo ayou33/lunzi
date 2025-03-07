@@ -50,7 +50,7 @@ export interface StateQueue {
   cancel: (idOrLabel: string | string[], reason?: string) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
-  on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => Function;
+  on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => () => void;
   destroy: () => void;
 }
 
@@ -217,7 +217,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
    * @param {boolean} oneOff - Flag to indicate if the handler should be executed only once.
    * @returns {Function} The function to unsubscribe.
    */
-  function onStateChange <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff: boolean = false): Function {
+  function onStateChange <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff: boolean = false): () => void {
     return (oneOff ? once : on)(stateEvent(state), handler)
   }
 
