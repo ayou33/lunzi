@@ -1,44 +1,77 @@
-export type EventName = string | string[]
+export type EventName<T extends string = string> = T | T[]
 
 export type EventType = {
   name: string;
   type: string;
 }
 
+/**
+ * 解析事件名字符串，支持多事件和命名空间
+ * @param name 事件名或事件名数组
+ * @returns 解析后的事件类型数组
+ */
 export function parseEventName (name: EventName): EventType[] {
+  if (!name) return []
+  
   if (Array.isArray(name)) {
-    return parseEventName(name.join(' '))
+    return name.flatMap(n => parseEventName(n))
   }
   
-  return name.trim().split(/^|\s+/).map(n => {
-    const names = n.split('.')
-    const name = names[0].trim()
-    const types = names.slice(1)
-    
-    return types.length === 0 ? [{
-      name,
-      type: '',
-    }] : types.map(type => ({
-      name,
-      type: type.trim(),
-    }))
-  }).reduce((a, b) => a.concat(b), [])
+  const trimmedName = name.trim()
+  if (!trimmedName) return []
+  
+  return trimmedName
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap(n => {
+      const parts = n.split('.').map(s => s.trim()).filter(Boolean)
+      if (parts.length === 0) return []
+      
+      const [eventName, ...types] = parts
+      if (!eventName) return []
+      
+      if (types.length === 0) {
+        return [{ name: eventName, type: '' }]
+      }
+      return types.map(type => ({ name: eventName, type }))
+    })
 }
 
-export function useEventName (event: EventName, use: (name: string, type: string) => void) {
-  parseEventName(event).map(event => {
-    if (event.name) use(event.name, event.type)
+/**
+ * 使用事件名执行回调函数
+ * @param event 事件名
+ * @param use 回调函数
+ */
+export function useEventName (event: EventName, use: (name: string, type: string) => void): void {
+  if (!event || !use) return
+  
+  parseEventName(event).forEach(eventType => {
+    if (eventType.name) {
+      try {
+        use(eventType.name, eventType.type)
+      } catch (error) {
+        console.error('Error in useEventName callback:', error)
+      }
+    }
   })
 }
 
 export type EventListener = (e: Event, ...dataSet: any[]) => void
 
-export type EventOptions = AddEventListenerOptions | boolean
+export type EventOptions = AddEventListenerOptions & {
+  priority?: number; // 事件优先级，数值越大优先级越高
+} | boolean
 
-export function makeListener (listener: (e: Event, ...dataSet: any[]) => void) {
-  return (e: Event, ...dataSet: any[]) => {
-    listener(e, ...dataSet)
+/**
+ * 创建监听器包装函数
+ * @param listener 原始监听器
+ * @returns 包装后的监听器
+ */
+export function makeListener (listener: EventListener): EventListener {
+  if (typeof listener !== 'function') {
+    throw new TypeError('Listener must be a function')
   }
+  return listener
 }
 
 export type EventRecord = {
@@ -47,69 +80,101 @@ export type EventRecord = {
   listener: EventListener;
   rawListener: EventListener;
   options?: EventOptions;
+  priority: number;
+  addTime: number; // 添加时间戳
 }
 
 const DEFAULT_MAX_LISTENERS = 1000
 
-export function useEvent (
+/**
+ * 事件管理器
+ * @param onSub 订阅事件回调
+ * @param onRemove 移除事件回调
+ * @param onPub 发布事件回调
+ */
+export function useEvent<T extends string = string> (
   onSub?: (event: string, listener: EventListener, options?: EventOptions) => void,
   onRemove?: (event: string, listener: EventListener, options?: EventOptions) => void,
   onPub?: (event: string, ...dataSet: any[]) => void,
 ) {
   const __events: EventRecord[] = []
   let MAX_LISTENERS = DEFAULT_MAX_LISTENERS
+  let __eventStats: Map<string, { count: number; lastEmit: number }> = new Map()
   
   /**
-   * 添加绑定
-   * 事件指定规则 可支持带多个命名空间的多个事件一次性绑定 其中不同的事件之间以空白符分割，不同的命名空间以.分割
-   * 绑定规则
-   *  相同的绑定会替换原有的事件处理器以及事件处理配置项
-   *  新的绑定会添加一条新的绑定记录
-   *
-   * 相同的绑定是指 name,namespace,listener同时绝对相等则视为相同的绑定
-   * @param event string 'name.namespace1.namespace2 name2.namespace1.namespace2'
-   * @param listener function (e: Event, ...data) => void
-   * @param options boolean | object
-   * @returns () => void 解绑函数
+   * 获取事件优先级
    */
-  function on (event: EventName, listener: EventListener, options?: EventOptions) {
+  function getPriority (options?: EventOptions): number {
+    if (typeof options === 'object' && options && 'priority' in options) {
+      return typeof options.priority === 'number' ? options.priority : 0
+    }
+    return 0
+  }
+  
+  /**
+   * 添加事件绑定
+   * @param event 事件名
+   * @param listener 监听器函数
+   * @param options 选项
+   * @returns 取消订阅函数
+   */
+  function on (event: EventName<T>, listener: EventListener, options?: EventOptions) {
+    if (!listener) {
+      throw new TypeError('Listener is required')
+    }
+    
     const scopedListener = makeListener(listener)
+    const priority = getPriority(options)
+    const addTime = Date.now()
     
     useEventName(event, (name, type) => {
-      for (let i = 0, el = __events.length; i < el; i++) {
+      let replaced = false
+      for (let i = 0; i < __events.length; i++) {
         const record = __events[i]
-        /**
-         * 已经绑定过事件，先卸载原来的再绑定新的
-         * 名称相同且命名空间相同且处理函数相同即视为相同的绑定
-         */
         if (
           record.name === name &&
           record.type === type &&
           record.rawListener === listener
         ) {
-          // console.log('skip', name, type)
           onRemove?.(record.name, record.listener, record.options)
           record.listener = scopedListener
           record.options = options
+          record.priority = priority
+          record.addTime = addTime
           onSub?.(record.name, scopedListener, options)
-          return
+          replaced = true
+          break
         }
       }
       
-      __events.push({
-        name,
-        type,
-        listener: scopedListener,
-        rawListener: listener,
-        options,
-      })
-      
-      onSub?.(name, scopedListener, options)
-      
-      if (__events.length >= MAX_LISTENERS) {
-        throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
-      } else if (__events.length / MAX_LISTENERS > 0.9) {
-        console.warn(`The number of events is too large: ${__events.length}`)
+      if (!replaced) {
+        const newRecord: EventRecord = {
+          name,
+          type,
+          listener: scopedListener,
+          rawListener: listener,
+          options,
+          priority,
+          addTime,
+        }
+        
+        // 按优先级插入，优先级高的在前面
+        let insertIndex = __events.length
+        for (let i = 0; i < __events.length; i++) {
+          if (__events[i].priority < priority) {
+            insertIndex = i
+            break
+          }
+        }
+        __events.splice(insertIndex, 0, newRecord)
+        
+        onSub?.(name, scopedListener, options)
+        
+        if (__events.length > MAX_LISTENERS) {
+          throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
+        } else if (__events.length / MAX_LISTENERS > 0.9) {
+          console.warn(`The number of events is too large: ${__events.length}`)
+        }
       }
     })
     
@@ -119,115 +184,200 @@ export function useEvent (
   }
   
   /**
-   * 一次性绑定即 当所绑定的事件触发之后立即自动解绑
-   * 事件指定规则同on
-   * @param event
-   * @param listener
-   * @param options
+   * 一次性绑定
+   * @param event 事件名
+   * @param listener 监听器函数
+   * @param options 选项
+   * @returns 取消订阅函数
    */
-  function once (event: EventName, listener: EventListener, options?: EventOptions) {
-    return on(event, function handler (e: Event, ...dataSet: any[]) {
-      listener(e, ...dataSet)
-      off(event, handler)
-    }, options)
-  }
-  
-  /**
-   * 事件解绑
-   * 事件指定规则同on
-   * 解绑规则
-   *  对可选命名空间和事件处理器若指定则进行绝对相等匹配,若不指定则只进行name匹配
-   * @param event
-   * @param listener
-   */
-  function off (event: EventName, listener?: EventListener) {
-    if (event === '*') {
-      __events.length = 0
-    } else {
-      useEventName(event, (name, type) => {
-        let j = -1
-        for (let i = 0, el = __events.length; i < el; i++) {
-          const record = __events[i]
-          if (
-            (name === '*' || record.name === name) &&
-            /**
-             * 不指定命名空间，会删除所有name相同的注册事件
-             */
-            (type === '' || record.type === type) &&
-            (!listener || record.rawListener === listener)
-          ) {
-            onRemove?.(record.name, record.listener, record.options)
-          } else {
-            __events[++j] = record
-          }
-        }
-        
-        __events.length = ++j
-      })
+  function once (event: EventName<T>, listener: EventListener, options?: EventOptions) {
+    if (!listener) {
+      throw new TypeError('Listener is required')
     }
+    
+    function handler (e: Event, ...dataSet: any[]) {
+      try {
+        listener(e, ...dataSet)
+      } finally {
+        off(event, handler)
+      }
+    }
+    
+    return on(event, handler, options)
   }
   
   /**
-   * 事件指定规则同on
-   * 触发匹配规则
-   *  对name和可选的命名空间做绝对相等匹配
-   * @param event
-   * @param dataSet
+   * 解绑事件
+   * @param event 事件名
+   * @param listener 监听器函数（可选）
    */
-  function emit (event: EventName, ...dataSet: any[]) {
-    useEventName(event, (name, type) => {
-      const e = new CustomEvent(name)
-      for (let i = 0, el = __events.length; i < el; i++) {
-        const record = __events[i]
-        
-        if (!record) {
-          el = __events.length
-          i--
-          continue
+  function off (event: EventName<T>, listener?: EventListener): void {
+    if (event === '*') {
+      __events.forEach(record => {
+        try {
+          onRemove?.(record.name, record.listener, record.options)
+        } catch (error) {
+          console.error('Error in onRemove callback:', error)
         }
+      })
+      __events.length = 0
+      __eventStats.clear()
+      return
+    }
+    
+    useEventName(event, (name, type) => {
+      let j = 0
+      for (let i = 0; i < __events.length; i++) {
+        const record = __events[i]
+        const shouldRemove = (
+          (name === '*' || record.name === name) &&
+          (type === '' || record.type === type) &&
+          (!listener || record.rawListener === listener)
+        )
         
+        if (shouldRemove) {
+          try {
+            onRemove?.(record.name, record.listener, record.options)
+          } catch (error) {
+            console.error('Error in onRemove callback:', error)
+          }
+        } else {
+          __events[j++] = record
+        }
+      }
+      __events.length = j
+    })
+  }
+  
+  /**
+   * 触发事件
+   * @param event 事件名
+   * @param dataSet 传递的数据
+   */
+  function emit (event: EventName<T>, ...dataSet: any[]): void {
+    useEventName(event, (name, type) => {
+      const e = new CustomEvent(name, { detail: dataSet })
+      
+      // 更新统计信息
+      const stat = __eventStats.get(name) || { count: 0, lastEmit: 0 }
+      stat.count++
+      stat.lastEmit = Date.now()
+      __eventStats.set(name, stat)
+      
+      // 拷贝一份，防止 once 事件导致遍历出错
+      const records = __events.slice()
+      
+      for (const record of records) {
         if (
           record.name === '*' ||
-          record.name === name &&
-          /**
-           * 不指定命名空间，会触发所有name相同的注册事件
-           */
-          (type === '' || record.type === type)
+          (record.name === name && (type === '' || record.type === type))
         ) {
-          record.listener(e, ...dataSet)
-          onPub?.(name, e, ...dataSet)
+          try {
+            record.listener(e, ...dataSet)
+            onPub?.(name, e, ...dataSet)
+          } catch (error) {
+            console.error(`Error in event listener for "${name}":`, error)
+          }
         }
       }
     })
   }
   
   /**
-   * 获取指定或所有事件的有效的绑定记录总数
-   * @param event
+   * 获取事件监听数量
+   * @param event 事件名（可选）
+   * @returns 监听器数量
    */
-  function listenerCount (event?: EventName) {
-    if (event) {
-      return __events
-        .filter(record => parseEventName(event)
-          .some(event => event.name === record.name && (event.type === '' || event.type === record.type)),
-        ).length
+  function listenerCount (event?: EventName<T>): number {
+    if (!event) {
+      return __events.length
     }
-    return __events.length
+    
+    const parsed = parseEventName(event)
+    return __events.filter(record =>
+      parsed.some(ev => ev.name === record.name && (ev.type === '' || ev.type === record.type)),
+    ).length
   }
   
   /**
-   * 更新最大可存在的事件绑定记录值
-   * @param max
+   * 获取所有事件名
+   * @returns 事件名数组
    */
-  function setMaxListeners (max: number) {
+  function eventNames (): string[] {
+    const names = new Set<string>()
+    __events.forEach(record => names.add(record.name))
+    return Array.from(names)
+  }
+  
+  /**
+   * 获取指定事件的监听器
+   * @param event 事件名
+   * @returns 监听器数组
+   */
+  function listeners (event: EventName<T>): EventListener[] {
+    const parsed = parseEventName(event)
+    return __events
+      .filter(record =>
+        parsed.some(ev => ev.name === record.name && (ev.type === '' || ev.type === record.type)),
+      )
+      .map(record => record.rawListener)
+  }
+  
+  /**
+   * 设置最大监听数
+   * @param max 最大数量
+   */
+  function setMaxListeners (max: number): void {
+    if (max < 0) {
+      throw new TypeError('Max listeners must be a non-negative number')
+    }
     MAX_LISTENERS = Math.max(DEFAULT_MAX_LISTENERS, max)
   }
   
   /**
-   * 查看当前可绑定的事件记录的最大值
+   * 获取最大监听数
+   * @returns 最大监听数
    */
-  function getMaxListeners () {
+  function getMaxListeners (): number {
     return MAX_LISTENERS
+  }
+  
+  /**
+   * 获取事件统计信息
+   * @param event 事件名（可选）
+   * @returns 统计信息
+   */
+  function getEventStats (event?: string) {
+    if (event) {
+      return __eventStats.get(event) || { count: 0, lastEmit: 0 }
+    }
+    return Object.fromEntries(__eventStats)
+  }
+  
+  /**
+   * 清理所有事件
+   */
+  function clear (): void {
+    off('*' as EventName<T>)
+  }
+  
+  /**
+   * 获取调试信息
+   */
+  function debug () {
+    return {
+      totalListeners: __events.length,
+      maxListeners: MAX_LISTENERS,
+      eventNames: eventNames(),
+      events: __events.map(record => ({
+        name: record.name,
+        type: record.type,
+        priority: record.priority,
+        addTime: record.addTime,
+        options: record.options,
+      })),
+      stats: getEventStats(),
+    }
   }
   
   return {
@@ -236,8 +386,13 @@ export function useEvent (
     off,
     emit,
     listenerCount,
+    eventNames,
+    listeners,
     setMaxListeners,
     getMaxListeners,
+    getEventStats,
+    clear,
+    debug,
   }
 }
 
