@@ -52,7 +52,7 @@ class BitCount {
       if (this.parent) {
         this.parent.add(1)
       } else {
-        this.parent = new BitCount(1, null, {
+        this.parent = new BitCount(Math.floor(next / this.options.radix), null, {
           radix: this.options.radix,
           target: this.options.target,
         })
