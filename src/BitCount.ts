@@ -118,7 +118,11 @@ class BitCount {
     }
     
     if (Number.isNaN(value)) {
-      throw new Error('Value is NaN, please make sure that the radix and the number are valid integers')
+      console.error('Value is NaN:', {
+        radix: this.options.radix,
+        number: this._number,
+      })
+      return 0
     }
     
     return value
