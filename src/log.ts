@@ -14,6 +14,13 @@ interface Printer {
   badge (badge: string, style?: string): void;
   
   if (pred: any): (...args: any[]) => void;
+  
+  /**
+   * log [method]
+   * @param method
+   * @param args
+   */
+  m (method: string, ...args: any[]): void;
 }
 
 function createPrinter (log: Log, name?: string, cssText?: string): Printer {
@@ -63,6 +70,10 @@ function createPrinter (log: Log, name?: string, cssText?: string): Printer {
         return output(...args)
       }
     }
+  }
+  
+  output.m = (tag: string, ...rest: any[]) => {
+    print('log', `[${tag}]`, ...rest)
   }
   
   return output

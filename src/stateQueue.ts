@@ -234,13 +234,8 @@ export function stateQueue (parallel: number = 1): StateQueue {
 
     const left = tasks.filter(shouldKeep)
 
-    // Abort any queued task that was removed so downstream listeners
-    // (e.g. stateFetch) can react even when run() was never called.
-    tasks.forEach(task => {
-      if (!shouldKeep(task)) task.controller.abort(reason)
-    })
-
     tasks.length = 0
+
     tasks.push(...left)
     
     let taskAborted = false
