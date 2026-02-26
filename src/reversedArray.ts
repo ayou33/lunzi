@@ -1,12 +1,23 @@
 export class ReversedArray<T = number> {
-  private readonly _arr: any[] = []
+  private readonly _arr: T[] = []
 
-  public [Symbol.iterator] () {
-    return this._arr[Symbol.iterator]()
+  /**
+   * Iterates in reversed-view order: index 0 (newest) first.
+   * This is consistent with `item(0)` returning the most recently pushed value.
+   */
+  public [Symbol.iterator] (): Iterator<T> {
+    let i = this._arr.length - 1
+    const arr = this._arr
+    return {
+      next (): IteratorResult<T> {
+        if (i >= 0) return { value: arr[i--], done: false }
+        return { value: undefined as unknown as T, done: true }
+      },
+    }
   }
 
-  constructor (arr?: any[]) {
-    this._arr = []
+  constructor (arr?: T[]) {
+    // No redundant `this._arr = []` — the field initializer above already does it.
     if (Array.isArray(arr)) {
       this._arr = arr
     }
@@ -76,7 +87,12 @@ export class ReversedArray<T = number> {
    * @param end
    */
   slice (begin: number, end: number): T[] {
-    return this._arr.slice(this.transfer(end) + 1 < 0 ? 0 : this.transfer(end) + 1, this.transfer(begin) + 1)
+    const sliceStart = this.transfer(end) + 1 < 0 ? 0 : this.transfer(end) + 1
+    const sliceEnd = this.transfer(begin) + 1
+    // Guard begin out-of-bounds: transfer(begin)+1 ≤ 0 means begin is past the
+    // end of the array in the reversed view, so the range is empty.
+    if (sliceEnd <= 0 || sliceStart >= sliceEnd) return []
+    return this._arr.slice(sliceStart, sliceEnd)
   }
 
   first (): T | undefined {

@@ -9,12 +9,14 @@ export function parseEventName (name: EventName): EventType[] {
   if (Array.isArray(name)) {
     return parseEventName(name.join(' '))
   }
-  
-  return name.trim().split(/^|\s+/).map(n => {
+
+  // Use /\s+/ instead of /^|\s+/: the `^` alternation causes an empty leading
+  // element on every input, which must be silently skipped downstream.
+  return name.trim().split(/\s+/).map(n => {
     const names = n.split('.')
     const name = names[0].trim()
     const types = names.slice(1)
-    
+
     return types.length === 0 ? [{
       name,
       type: '',
@@ -35,6 +37,13 @@ export type EventListener = (e: Event, ...dataSet: any[]) => void
 
 export type EventOptions = AddEventListenerOptions | boolean
 
+/**
+ * Creates a stable wrapper function around `listener`.
+ * Storing this wrapper (as `record.listener`) separately from the original
+ * (as `record.rawListener`) lets `on()` use reference equality on the raw
+ * function for deduplication, while still giving `onSub`/`onRemove` hooks
+ * and future decoration (e.g. context binding) a distinct handle.
+ */
 export function contextListener (listener: (e: Event, ...dataSet: any[]) => void) {
   return (e: Event, ...dataSet: any[]) => {
     listener(e, ...dataSet)
@@ -102,12 +111,14 @@ export function useEvent (
         rawListener: listener,
         options,
       })
-      
-      onSub?.(name, contextedListener, options)
-      
+
+      // Check BEFORE notifying onSub so the hook is never called for a
+      // registration that ultimately fails due to overflow.
       if (__events.length >= MAX_LISTENERS) {
         throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
       }
+
+      onSub?.(name, contextedListener, options)
     })
     
     return () => {
@@ -185,11 +196,12 @@ export function useEvent (
         
         if (
           record.name === '*' ||
-          record.name === name &&
-          /**
-           * 不指定命名空间，会触发所有name相同的注册事件
-           */
-          (type === '' || record.type === type)
+          (
+            record.name === name &&
+            // No type filter: trigger all namespaces for this event name.
+            // With a type: only trigger when namespace matches.
+            (type === '' || record.type === type)
+          )
         ) {
           record.listener(e, ...dataSet)
           onPub?.(name, e, ...dataSet)

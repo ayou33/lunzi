@@ -99,13 +99,16 @@ export function stateQueue (parallel: number = 1): StateQueue {
     const isRun = 'function' === typeof task
     const run = isRun ? task : task.run
     const controller = new AbortController()
+    // Compute id first so it is always a string; the explicit `id` key below
+    // is placed AFTER the spread to prevent `...task` from overriding it with
+    // undefined when the caller passes `{ id: undefined, ... }`.
     const id = isRun ? makeId() : (task.id || makeId())
-    
+
     return {
-      id,
       priority: DEFAULT_PRIORITY,
       label: LABEL_UNKNOWN,
-      ...task,
+      ...(isRun ? {} : task),
+      id, // always wins over the spread
       run () {
         const [promise] = controlledPromise(async (resolve, reject) => {
           try {
@@ -120,7 +123,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
             reject(error as Error)
           }
         }, controller)
-        
+
         return promise
       },
       controller,
@@ -133,14 +136,18 @@ export function stateQueue (parallel: number = 1): StateQueue {
    */
   function run (task: Task) {
     running.push(task)
-    
+
     emitRunning(task.id)
 
     task
       .run()
+      // Absorb rejections (abort / user errors) so they don't become unhandled
+      // promise rejections. The queue is fire-and-forget; callers cannot await
+      // individual task results through the queue API.
+      .catch(() => {})
       .finally(() => {
         running.splice(running.indexOf(task), 1)
-        
+
         next()
       })
   }
@@ -227,8 +234,13 @@ export function stateQueue (parallel: number = 1): StateQueue {
 
     const left = tasks.filter(shouldKeep)
 
-    tasks.length = 0
+    // Abort any queued task that was removed so downstream listeners
+    // (e.g. stateFetch) can react even when run() was never called.
+    tasks.forEach(task => {
+      if (!shouldKeep(task)) task.controller.abort(reason)
+    })
 
+    tasks.length = 0
     tasks.push(...left)
     
     let taskAborted = false
@@ -242,10 +254,12 @@ export function stateQueue (parallel: number = 1): StateQueue {
         taskAborted = true
       }
     })
-    
-    if (taskAborted) {
-      next()
-    }
+
+    // Do NOT call next() here: the aborted tasks are still in `running[]` at
+    // this point (their .finally() hasn't executed yet). next() will be called
+    // naturally by .finally() once the abort resolves, avoiding a spurious
+    // BUSY event and a double-next race condition.
+    void taskAborted
   }
   
   function destroy () {

@@ -48,13 +48,11 @@ function isPathSelector (key: string) {
 }
 
 function parseGroupValue (name: string, p: string | null) {
-  if (p) {
-    const value = p.match(new RegExp(`(^|${options.valueDelimiter})${name}=([^${options.valueDelimiter}]*)(${options.valueDelimiter}|$)`))
-    if (value) {
-      return value[2]
-    }
-  }
-  return null
+  if (!p) return null
+  // Split by the value delimiter so multi-field groups are handled correctly.
+  const prefix = `${name}=`
+  const field = p.split(options.valueDelimiter).find(part => part.startsWith(prefix))
+  return field ? field.slice(prefix.length) : null
 }
 
 function parsePathValue (paths: string[], p: string | null) {
@@ -71,19 +69,19 @@ function parsePathValue (paths: string[], p: string | null) {
 }
 
 function getBy (target: { getItem: (key: string) => string | null }) {
-  return function (key: string): string | null {
+  return function (key: string): unknown {
     if (isGroupSelector(key)) {
       const [groupKey, name] = key.split(options.groupDelimiter)
       const value = target.getItem(encode(groupKey))
       return parseGroupValue(name, value)
     }
-    
+
     if (isPathSelector(key)) {
       const [pathKey, ...paths] = key.split(options.pathDelimiter)
       const p = target.getItem(encode(pathKey))
       return parsePathValue(paths, p)
     }
-    
+
     return target.getItem(encode(key))
   }
 }
@@ -129,25 +127,35 @@ function formatPathValue (paths: string[], value: unknown, p: string | null) {
 }
 
 function formatGroupValue (name: string, value: unknown, p: string | null) {
+  const entry = `${name}=${value}`
   if (p) {
-    const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
-    return p.replace(reg, `$1${name}=${value}$2`)
+    // Use split/map/join so inserting, updating, and removing fields are all safe
+    // with any number of fields, without regex boundary edge-cases.
+    const prefix = `${name}=`
+    const parts = p.split(options.valueDelimiter)
+    const idx = parts.findIndex(part => part.startsWith(prefix))
+    if (idx >= 0) {
+      parts[idx] = entry  // update existing field
+    } else {
+      parts.push(entry)   // append new field
+    }
+    return parts.join(options.valueDelimiter)
   }
-  return `${name}=${value}`
+  return entry
 }
 
 function setBy (target: {
   getItem: (key: string) => string | null,
   setItem: (key: string, value: string) => void
 }) {
-  return function (key: string, value: string) {
+  return function (key: string, value: unknown) {
     if (isGroupSelector(key)) {
       const [groupKey, name] = key.split(options.groupDelimiter)
       const groupValue = target.getItem(encode(groupKey))
       target.setItem(encode(groupKey), formatGroupValue(name, value, groupValue))
       return
     }
-    
+
     if (isPathSelector(key)) {
       const [pathKey, ...paths] = key.split(options.pathDelimiter)
       const pathValue = target.getItem(encode(pathKey))
@@ -157,40 +165,52 @@ function setBy (target: {
       }
       return
     }
-    
-    target.setItem(encode(key), value)
+
+    // Coerce to string so numbers, booleans, etc. round-trip correctly
+    target.setItem(encode(key), String(value))
   }
 }
 
 function dropGroupValue (name: string, p: string) {
-  const reg = new RegExp(`(^|${options.valueDelimiter})${name}=[^${options.valueDelimiter}]*(${options.valueDelimiter}|$)`)
-  return p.replace(reg, '')
+  const prefix = `${name}=`
+  return p
+    .split(options.valueDelimiter)
+    .filter(part => !part.startsWith(prefix))
+    .join(options.valueDelimiter)
 }
 
 function removePath (paths: string[], p: string) {
-  const obj = JSON.parse(p)
-  let current = obj
-  let index = 0
-  let pathKey = paths[index]
-  
-  while (index < paths.length - 1) {
-    if (current[pathKey] === undefined) {
-      return
+  try {
+    const obj = JSON.parse(p)
+    let current = obj
+    let index = 0
+    let pathKey = paths[index]
+
+    while (index < paths.length - 1) {
+      if (current[pathKey] === undefined) {
+        return null
+      }
+
+      current = current[pathKey]
+      pathKey = paths[++index]
     }
-    
-    current = current[pathKey]
-    pathKey = paths[++index]
+
+    if (isInsertIndex(pathKey)) {
+      // Bracketed index [n]: insert-style splice remove.
+      const position = Number(pathKey.slice(1, -1))
+      const idx = position < 0 ? (current.length + position + 1) : position
+      current.splice(idx, 1)
+    } else if (Array.isArray(current) && /^\d+$/.test(pathKey)) {
+      // Plain numeric index on an array: splice to avoid leaving holes.
+      current.splice(Number(pathKey), 1)
+    } else {
+      delete current[pathKey]
+    }
+
+    return JSON.stringify(obj)
+  } catch {
+    return null
   }
-  
-  if (isInsertIndex(pathKey)) {
-    const position = Number(pathKey.slice(1, -1))
-    const index = position < 0 ? (current.length + position + 1) : position
-    current.splice(index, 1)
-  } else {
-    delete current[pathKey]
-  }
-  
-  return JSON.stringify(obj)
 }
 
 function removeBy (target: {
@@ -239,9 +259,7 @@ export const sessionGet = getBy(sessionStorage)
 
 export const sessionSet = setBy(sessionStorage)
 
-export function sessionRemove (key: string) {
-  sessionStorage.removeItem(encode(key))
-}
+export const sessionRemove = removeBy(sessionStorage)
 
 export function sessionClear () {
   sessionStorage.clear()

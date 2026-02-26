@@ -2,18 +2,23 @@ export const _ = {
   _: '_',
 }
 
-function isPlaceholder (a: { _?: string }) {
-  return a === _ && a._ === _._
+/**
+ * Returns true only for the unique `_` placeholder sentinel.
+ * Using `unknown` + type predicate avoids accepting arbitrary objects.
+ */
+function isPlaceholder (a: unknown): a is typeof _ {
+  return a === _
 }
 
 type AnyFunction = (...args: any[]) => any
 
 /**
+ * Core recursive curry implementation.
  *
- * @param required 本次柯里化需要的实参数量
- * @param received 本次传入的实参
- * @param fn 柯里化函数对象
- * @returns
+ * @param required  Number of non-placeholder arguments still needed before
+ *                  the wrapped function can be invoked.
+ * @param fn        The original function to curry.
+ * @param received  Arguments accumulated so far (may contain placeholders).
  */
 function _curryN (required: number, fn: AnyFunction, received: any[] = []): AnyFunction {
   return function () {

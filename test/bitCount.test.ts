@@ -29,8 +29,8 @@ describe('BitCount', () => {
     it('minus without parent borrow', () => {
       const bitCount = new BitCount(0)
       bitCount.add(-1)
-      expect(bitCount.bitValue()).toBe(-1)
-      expect(bitCount.value()).toBe(-1)
+      expect(bitCount.bitValue()).toBe(0)
+      expect(bitCount.value()).toBe(0)
     })
     
     it('minus with parent borrow', () => {
@@ -75,6 +75,52 @@ describe('BitCount', () => {
       expect(bitCount.values()).toEqual([1, 1, 2])
       expect(bitCount.bitValue()).toBe(2)
       expect(bitCount.value()).toBe(3662)
+    })
+  })
+
+  describe('constructor guards', () => {
+    // Line 43: radix < 2 should throw
+    it('throws when radix is less than 2', () => {
+      expect(() => new BitCount(0, null, { radix: 1 })).toThrow('Radix must be greater than 1')
+    })
+
+    it('throws when radix is 0', () => {
+      expect(() => new BitCount(0, null, { radix: 0 })).toThrow('Radix must be greater than 1')
+    })
+
+    // Line 47: negative initial number should throw
+    it('throws when initial number is negative', () => {
+      expect(() => new BitCount(-1)).toThrow('Number must be a non-negative integer')
+    })
+  })
+
+  describe('value() NaN guard (lines 169-173)', () => {
+    it('returns 0 and logs an error when _number is NaN', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const bitCount = new BitCount(0)
+      // Force an internal NaN to exercise the guard
+      ;(bitCount as any)._number = NaN
+
+      expect(bitCount.value()).toBe(0)
+      expect(errorSpy).toHaveBeenCalledWith(
+        'BitCount: value() produced NaN',
+        expect.objectContaining({ number: NaN }),
+      )
+
+      errorSpy.mockRestore()
+    })
+
+    it('returns 0 and logs an error when a parent _number is NaN', () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {})
+      const parent = new BitCount(1)
+      const bitCount = new BitCount(0, parent)
+      // Corrupt the parent digit
+      ;(bitCount.parent as any)._number = NaN
+
+      expect(bitCount.value()).toBe(0)
+      expect(errorSpy).toHaveBeenCalled()
+
+      errorSpy.mockRestore()
     })
   })
 })

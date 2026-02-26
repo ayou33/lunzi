@@ -1,5 +1,113 @@
 import useEvent from '../src/event'
 
+describe('useEvent 钩子回调', () => {
+  test('on() 触发 onSub 回调', () => {
+    const onSub = jest.fn()
+    const { on } = useEvent(onSub)
+    const handler = jest.fn()
+    on('event', handler)
+    expect(onSub).toHaveBeenCalledTimes(1)
+    expect(onSub.mock.calls[0][0]).toBe('event')
+  })
+
+  test('off() 触发 onRemove 回调', () => {
+    const onRemove = jest.fn()
+    const { on, off } = useEvent(undefined, onRemove)
+    const handler = jest.fn()
+    on('event', handler)
+    off('event', handler)
+    expect(onRemove).toHaveBeenCalledTimes(1)
+  })
+
+  test('emit() 触发 onPub 回调', () => {
+    const onPub = jest.fn()
+    const { on, emit } = useEvent(undefined, undefined, onPub)
+    on('event', jest.fn())
+    emit('event', 42)
+    expect(onPub).toHaveBeenCalledTimes(1)
+    expect(onPub.mock.calls[0][0]).toBe('event')
+  })
+
+  test('重复订阅时先触发 onRemove 再触发 onSub', () => {
+    const calls: string[] = []
+    const onSub = jest.fn(() => calls.push('sub'))
+    const onRemove = jest.fn(() => calls.push('remove'))
+    const { on } = useEvent(onSub, onRemove)
+    const handler = jest.fn()
+    on('event', handler)
+    on('event', handler) // duplicate — replace
+    expect(calls).toEqual(['sub', 'remove', 'sub'])
+  })
+})
+
+describe('数组事件名', () => {
+  test('on() 接受字符串数组', () => {
+    const { on, listenerCount } = useEvent()
+    const handler = jest.fn()
+    on(['event1', 'event2'], handler)
+    expect(listenerCount()).toBe(2)
+  })
+
+  test('emit() 接受字符串数组，依次触发', () => {
+    const { on, emit } = useEvent()
+    const handler = jest.fn()
+    on('event1', handler)
+    on('event2', handler)
+    emit(['event1', 'event2'])
+    expect(handler).toHaveBeenCalledTimes(2)
+  })
+
+  test('off() 接受字符串数组', () => {
+    const { on, off, listenerCount } = useEvent()
+    const handler = jest.fn()
+    on('event1', handler)
+    on('event2', handler)
+    off(['event1', 'event2'], handler)
+    expect(listenerCount()).toBe(0)
+  })
+})
+
+describe('on() 返回取消订阅函数', () => {
+  test('调用返回值可取消订阅', () => {
+    const { on, emit, listenerCount } = useEvent()
+    const handler = jest.fn()
+    const unsubscribe = on('event', handler)
+    expect(listenerCount()).toBe(1)
+    unsubscribe()
+    expect(listenerCount()).toBe(0)
+    emit('event')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  test('多次调用返回值是幂等的', () => {
+    const { on, listenerCount } = useEvent()
+    const unsubscribe = on('event', jest.fn())
+    unsubscribe()
+    expect(() => unsubscribe()).not.toThrow()
+    expect(listenerCount()).toBe(0)
+  })
+})
+
+describe('once() 行为', () => {
+  test('只触发一次', () => {
+    const { once, emit } = useEvent()
+    const handler = jest.fn()
+    once('event', handler)
+    emit('event')
+    emit('event')
+    expect(handler).toHaveBeenCalledTimes(1)
+  })
+
+  test('传递数据参数', () => {
+    const { once, emit } = useEvent()
+    const handler = jest.fn()
+    once('event', handler)
+    emit('event', 'a', 'b')
+    expect(handler.mock.calls[0][1]).toBe('a')
+    expect(handler.mock.calls[0][2]).toBe('b')
+  })
+})
+
 describe('单次订阅', () => {
   test('无命名空间', () => {
     const { on, listenerCount } = useEvent()

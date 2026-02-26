@@ -13,11 +13,21 @@ export function controlledPromise<T> (
   const ctrl = controller ?? new AbortController()
   
   const promise = new Promise<T>((resolve, reject) => {
-    ctrl.signal.addEventListener('abort', function onAbort () {
-      reject('Promise aborted')
-      ctrl.signal.removeEventListener('abort', onAbort)
-    })
-    
+    // If the controller was already aborted before this promise was created,
+    // the 'abort' event will never fire — reject eagerly in that case.
+    if (ctrl.signal.aborted) {
+      reject(new Error('Promise aborted'))
+      return
+    }
+
+    // { once: true } automatically removes the listener after it fires,
+    // so no manual removeEventListener is needed.
+    ctrl.signal.addEventListener(
+      'abort',
+      () => reject(new Error('Promise aborted')),
+      { once: true },
+    )
+
     executor?.(resolve, reject)
   })
   

@@ -109,6 +109,44 @@ describe('controlledPromise', () => {
       await promise
     } catch (error) {
       expect(error).toBeInstanceOf(Error)
+      expect((error as Error).message).toBe('Promise aborted')
     }
+  })
+
+  it('should work without an executor (stays pending until aborted)', async () => {
+    const [promise, abort] = controlledPromise()
+    const settled = jest.fn()
+    promise.catch(settled)
+    // Not yet settled
+    expect(settled).not.toHaveBeenCalled()
+    abort()
+    await promise.catch(() => {})
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+
+  it('should accept an external AbortController', async () => {
+    const controller = new AbortController()
+    const [promise] = controlledPromise(resolve => {
+      setTimeout(() => resolve('late'), 100)
+    }, controller)
+    controller.abort()
+    await expect(promise).rejects.toThrow('Promise aborted')
+  })
+
+  it('should reject immediately when a pre-aborted controller is passed', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const [promise] = controlledPromise<string>(resolve => {
+      setTimeout(() => resolve('late'), 100)
+    }, controller)
+    await expect(promise).rejects.toThrow('Promise aborted')
+  })
+
+  it('should be safe to call abort multiple times', async () => {
+    const [promise, abort] = controlledPromise()
+    abort()
+    // Second call must not throw
+    expect(() => abort()).not.toThrow()
+    await promise.catch(() => {})
   })
 })

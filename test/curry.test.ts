@@ -1,6 +1,31 @@
 import curry, { curryN, _ } from '../src/curry'
 
+describe('placeholder sentinel _', () => {
+  test('_ 是独立的单例对象，不是普通字符串', () => {
+    expect(_).not.toBe('_')
+    expect(typeof _).toBe('object')
+  })
+
+  test('不同的对象即使有相同结构也不被视为占位符', () => {
+    // Only the exact _ reference should be treated as a placeholder;
+    // a structurally identical object must not be.
+    const imposter = { _: '_' }
+    // If isPlaceholder treated imposter as a placeholder, curry would not call
+    // the function immediately — we verify it does.
+    const fn = curry((a: number) => a)
+    expect(fn(imposter as any)).toEqual(imposter) // called directly, not deferred
+  })
+})
+
 describe('curry', () => {
+  describe('0个参数: () => 42', () => {
+    const fn = curry(() => 42)
+
+    test('足数调用', () => {
+      expect(fn()).toBe(42)
+    })
+  })
+
   describe('1个参数: a => a', () => {
     const fn = curry((a: number) => a)
     const a = 1
@@ -46,6 +71,60 @@ describe('curry', () => {
       })
     })
   })
+
+  describe('3个参数: (a, b, c) => a + b + c', () => {
+    const fn = curry((a: number, b: number, c: number) => a + b + c)
+    const a = 1
+    const b = 2
+    const c = 3
+    const result = a + b + c
+
+    test('足数调用 — 三参数一次传入', () => {
+      expect(fn(a, b, c)).toBe(result)
+    })
+
+    test('逐一调用', () => {
+      expect(fn(a)(b)(c)).toBe(result)
+    })
+
+    test('前两个一起调用', () => {
+      expect(fn(a, b)(c)).toBe(result)
+    })
+
+    test('后两个一起调用', () => {
+      expect(fn(a)(b, c)).toBe(result)
+    })
+
+    describe('占位调用', () => {
+      test('第一个占位', () => {
+        expect(fn(_, b, c)(a)).toBe(result)
+      })
+
+      test('第二个占位', () => {
+        expect(fn(a, _, c)(b)).toBe(result)
+      })
+
+      test('第三个占位', () => {
+        expect(fn(a, b, _)(c)).toBe(result)
+      })
+
+      test('前两个占位', () => {
+        expect(fn(_, _, c)(a, b)).toBe(result)
+      })
+
+      test('后两个占位', () => {
+        expect(fn(a, _, _)(b, c)).toBe(result)
+      })
+
+      test('全部占位 — 逐一填入', () => {
+        expect(fn(_, _, _)(a)(b)(c)).toBe(result)
+      })
+
+      test('全部占位 — 一次填入', () => {
+        expect(fn(_, _, _)(a, b, c)).toBe(result)
+      })
+    })
+  })
 })
 
 describe('curryN', () => {
@@ -69,13 +148,19 @@ describe('curryN', () => {
       expect(curryN(n)(fn)).toBeInstanceOf(Function)
       expect(curryN(n)(fn)(a)).toBe(a)
     })
-    
-    
+
     test('带默认值的柯里化: (a, b, c = 3) => a + b + c', () => {
       const defaultValue = 3
       const fn = (a: number, b: number, c = defaultValue) => a + b + c
       const add = curryN(2, fn)
       expect(add(1)(2)).toBe(1 + 2 + defaultValue)
+    })
+
+    test('curryN 自身支持占位符', () => {
+      const fn = (a: number, b: number) => a - b
+      // Fill required (n) later via placeholder
+      const partialFn = curryN(_, fn)(2)
+      expect(partialFn(10, 20)).toBe(10 - 20)
     })
   })
 
@@ -99,6 +184,12 @@ describe('curryN', () => {
       const result = 10 + 20 + 3 + 4
       expect(f(10)(20)).toBe(result)
       expect(f(10, 20)).toBe(result)
+    })
+
+    test('n为2, 占位符场景: b 先填, a 后填', () => {
+      const f = curryN(2, fn)
+      const result = 10 + 20 + 3 + 4
+      expect(f(_, 20)(10)).toBe(result)
     })
 
     test('n为3, a = 10, b = 20, c = 30', () => {
