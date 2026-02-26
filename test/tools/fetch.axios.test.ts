@@ -46,7 +46,7 @@ describe('fetch', () => {
       .finally(() => {
         expect(cb).not.toBeCalled()
         expect(ecb).toBeCalledTimes(1)
-        expect(ecb.mock.lastCall[0].message).toBe('abort')
+        expect(ecb.mock.lastCall[0].message).toBe('Request aborted')
       })
     
     cancel('get')

@@ -227,34 +227,36 @@ export function stateQueue (parallel: number = 1): StateQueue {
    * @param reason
    */
   function cancel (idOrLabel: string | string[], reason?: string) {
-    // cancel queued tasks
-    const shouldKeep = 'string' === typeof idOrLabel
-      ? ({ id, label }: Pick<Task, 'id' | 'label'>) => !(id == idOrLabel || label === idOrLabel)
-      : ({ id, label }: Pick<Task, 'id' | 'label'>) => !(idOrLabel.includes(id) || idOrLabel.includes(label))
+    // Positive predicate: true when a task matches the cancel target.
+    const shouldCancel: (task: Pick<Task, 'id' | 'label'>) => boolean =
+      typeof idOrLabel === 'string'
+        ? ({ id, label }) => id === idOrLabel || label === idOrLabel
+        : ({ id, label }) => idOrLabel.includes(id) || idOrLabel.includes(label)
 
-    const left = tasks.filter(shouldKeep)
-
+    // Single pass: collect survivors and abort the removed ones.
+    const kept: Task[] = []
+    for (const task of tasks) {
+      if (shouldCancel(task)) {
+        task.controller.abort(reason)
+      } else {
+        kept.push(task)
+      }
+    }
     tasks.length = 0
+    tasks.push(...kept)
 
-    tasks.push(...left)
-    
-    let taskAborted = false
     /**
      * abort running tasks
      * @warn 运行中的任务取消是一个异步操作 当前事件循环周期结束时才会完成操作
-      */
+     */
     running.forEach(task => {
-      if (!shouldKeep(task)) {
-        task.controller.abort(reason)
-        taskAborted = true
-      }
+      if (shouldCancel(task)) task.controller.abort(reason)
     })
 
     // Do NOT call next() here: the aborted tasks are still in `running[]` at
     // this point (their .finally() hasn't executed yet). next() will be called
     // naturally by .finally() once the abort resolves, avoiding a spurious
     // BUSY event and a double-next race condition.
-    void taskAborted
   }
   
   function destroy () {

@@ -200,15 +200,14 @@ describe('send', () => {
 
   describe('abort / cancel', () => {
     test('cancelling a queued task rejects the promise with "Request aborted"', async () => {
-      // parallel=1 so the second task stays queued while the first runs.
+      // parallel=1 — the blocker starts synchronously when enqueued, so the
+      // second task is guaranteed to be queued (not running) without needing
+      // to wait for any async tick.
       const sf = stateFetch(1)
-      const blocker = hangingFetch()
 
-      // Occupy the single slot.
-      sf.send(blocker, { url: '/api/block', label: 'block' })
-      await tick(10)
+      sf.send(hangingFetch(), { url: '/api/block', label: 'block' })
 
-      // This task will be queued but never started.
+      // This task goes into tasks[] immediately (slot is full).
       const p = sf.send(hangingFetch(), { url: '/api/queued', label: 'queued' })
       sf.cancel('queued', 'test-cancel')
 
@@ -237,10 +236,9 @@ describe('send', () => {
 describe('cancel', () => {
   test('cancels tasks by label', async () => {
     const sf = stateFetch(1)
-    const blocker = hangingFetch()
 
-    sf.send(blocker, { url: '/block', label: 'block' })
-    await tick(10)
+    // Blocker starts synchronously; batch tasks are immediately queued.
+    sf.send(hangingFetch(), { url: '/block', label: 'block' })
 
     const p1 = sf.send(hangingFetch(), { url: '/a', label: 'batch' })
     const p2 = sf.send(hangingFetch(), { url: '/b', label: 'batch' })
@@ -253,8 +251,8 @@ describe('cancel', () => {
 
   test('cancels tasks by array of ids', async () => {
     const sf = stateFetch(1)
+
     sf.send(hangingFetch(), { url: '/block', label: 'block' })
-    await tick(10)
 
     const p = sf.send(hangingFetch(), { url: '/c', id: 'myId' })
     sf.cancel(['myId'])
