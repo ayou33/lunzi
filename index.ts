@@ -15,3 +15,5 @@ export * from './src/stateFetch'
 export * from './src/stateQueue'
 
 export * from './src/store'
+
+export * from './src/tinify'
