@@ -50,7 +50,7 @@ export interface StateQueue {
   cancel: (idOrLabel: string | string[], reason?: string) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
-  on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => Function;
+  on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => VoidFunction;
   destroy: () => void;
 }
 
