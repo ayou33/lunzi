@@ -16,6 +16,7 @@ export type BitCountOptions = {
   radix: number;
   /** `onComplete` fires when `_value` reaches this number. */
   target?: number;
+  autoPrune?: boolean; // for auto-removing leading zeros on borrow
   /** Called once when the cumulative value matches `target`. */
   onComplete?: () => void
 }
@@ -112,7 +113,7 @@ class BitCount {
         // Prune leading-zero most-significant digit:
         // after the borrow, if the parent's only remaining value is 0 and it has
         // no further parent, it is a redundant leading zero and should be removed.
-        if (this.parent._number === 0 && this.parent.parent === null) {
+        if (this.options.autoPrune && this.parent._number === 0 && this.parent.parent === null) {
           this.parent = null
         }
       } else {
@@ -130,13 +131,20 @@ class BitCount {
   }
 
   /** Returns all digit values from most-significant to least-significant. */
-  values () {
+  values (prune = this.options.autoPrune) {
     const values: number[] = [this._number]
     let parent = this.parent
 
     while (parent) {
       values.unshift(parent._number)
       parent = parent.parent
+    }
+
+    if (prune) {
+      // Remove leading zeros, but leave at least one digit if the value is zero.
+      while (values.length > 1 && values[0] === 0) {
+        values.shift()
+      }
     }
 
     return values
