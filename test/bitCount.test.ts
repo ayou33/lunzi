@@ -35,7 +35,7 @@ describe('BitCount', () => {
     
     it('minus with parent borrow', () => {
       const parent = new BitCount(1)
-      const bitCount = new BitCount(0, parent)
+      const bitCount = new BitCount(0, parent, { autoPrune: true })
       bitCount.add(-1)
       expect(bitCount.bitValue()).toBe(9)
       expect(bitCount.value()).toBe(9)

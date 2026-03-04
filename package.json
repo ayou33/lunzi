@@ -4,7 +4,7 @@
     "jest": "^28.1.2",
     "jest-environment-jsdom": "^28.1.2",
     "ts-jest": "^28.0.5",
-    "typescript": "^5.3"
+    "typescript": "^5.3.3"
   },
   "name": "lunzi",
   "description": "自己造的轮子",

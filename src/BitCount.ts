@@ -30,11 +30,7 @@ class BitCount {
   /** Current value of this digit (always in the range [0, radix)). */
   _number: number = 0
 
-  constructor (number: number, parent?: BitCount | null, options?: {
-    radix: number;
-    target?: number;
-    onComplete?: () => void
-  } | number) {
+  constructor (number: number, parent?: BitCount | null, options?: Partial<BitCountOptions> | number) {
     this.options = Object.assign({
       radix: 10,
       target: 0,

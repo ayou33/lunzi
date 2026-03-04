@@ -217,7 +217,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
    * @param {boolean} oneOff - Flag to indicate if the handler should be executed only once.
    * @returns {Function} The function to unsubscribe.
    */
-  function onStateChange <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff: boolean = false): Function {
+  function onStateChange <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff: boolean = false) {
     return (oneOff ? once : on)(stateEvent(state), handler)
   }
 
