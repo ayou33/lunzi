@@ -585,25 +585,25 @@ describe('边界情况和错误处理', () => {
     })
 
     test('处理单个事件名但无类型', () => {
-      expect(parseEventName('event')).toEqual([{ name: 'event', type: '' }])
+      expect(parseEventName('event')).toEqual([{ name: 'event', namespace: '' }])
     })
 
     test('处理单个事件名有类型', () => {
-      expect(parseEventName('event.type')).toEqual([{ name: 'event', type: 'type' }])
+      expect(parseEventName('event.type')).toEqual([{ name: 'event', namespace: 'type' }])
     })
 
     test('处理多个空格分隔的事件', () => {
       expect(parseEventName('event1 event2 event3')).toEqual([
-        { name: 'event1', type: '' },
-        { name: 'event2', type: '' },
-        { name: 'event3', type: '' }
+        { name: 'event1', namespace: '' },
+        { name: 'event2', namespace: '' },
+        { name: 'event3', namespace: '' }
       ])
     })
 
     test('处理单个事件名有多个类型', () => {
       expect(parseEventName('event.type1.type2')).toEqual([
-        { name: 'event', type: 'type1' },
-        { name: 'event', type: 'type2' }
+        { name: 'event', namespace: 'type1' },
+        { name: 'event', namespace: 'type2' }
       ])
     })
 
@@ -920,7 +920,7 @@ describe('边界情况和错误处理', () => {
       const handler1 = jest.fn()
       const handler2 = jest.fn()
       
-      const unsubscribes = batchOn([
+      const { unsubscribes, unsubscribeAll } = batchOn([
         { event: 'event1', listener: handler1 },
         { event: 'event2', listener: handler2 }
       ])
@@ -941,6 +941,114 @@ describe('边界情况和错误处理', () => {
       expect(listenerCount()).toEqual(0)
       
       unsubscribes.forEach(unsubscribe => unsubscribe())
+      unsubscribeAll()
     })
+
+    test('unsubscribeAll 一键取消所有批量订阅', () => {
+      const { batchOn, listenerCount } = useEvent()
+      const { unsubscribeAll } = batchOn([
+        { event: 'event1', listener: jest.fn() },
+        { event: 'event2', listener: jest.fn() },
+        { event: 'event3', listener: jest.fn() },
+      ])
+      expect(listenerCount()).toEqual(3)
+      unsubscribeAll()
+      expect(listenerCount()).toEqual(0)
+    })
+  })
+})
+
+describe('Bug 1: priority 更新后重新排序', () => {
+  test('重复 on 同一 listener 更改 priority 后，执行顺序应按新优先级', () => {
+    const { on, emit } = useEvent()
+    const calls: string[] = []
+    const handlerA = jest.fn(() => calls.push('A'))
+    const handlerB = jest.fn(() => calls.push('B'))
+
+    on('event', handlerA, { priority: 1 })   // A: low priority
+    on('event', handlerB, { priority: 10 })  // B: high priority
+
+    emit('event')
+    expect(calls).toEqual(['B', 'A'])  // B first
+
+    calls.length = 0
+    on('event', handlerA, { priority: 20 })  // update A to highest priority
+
+    emit('event')
+    expect(calls).toEqual(['A', 'B'])  // A now first
+  })
+})
+
+describe('Bug 2: emit 过程中 on 新 listener 不在当次触发', () => {
+  test('listener 回调中添加的新 listener 不应在本次 emit 中执行', () => {
+    const { on, emit } = useEvent()
+    const newHandler = jest.fn()
+    const handler = jest.fn(() => {
+      on('event', newHandler)
+    })
+
+    on('event', handler)
+    emit('event')
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(newHandler).not.toHaveBeenCalled()  // 本次 emit 不触发
+
+    emit('event')
+    expect(newHandler).toHaveBeenCalledTimes(1)  // 下次 emit 才触发
+  })
+})
+
+describe('Defect 3: onPub 每次 emit 只触发一次', () => {
+  test('注册多个 listener 时 onPub 每次 emit 只触发一次', () => {
+    const onPub = jest.fn()
+    const { on, emit } = useEvent(undefined, undefined, onPub)
+
+    on('event', jest.fn())
+    on('event', jest.fn())
+    on('event', jest.fn())
+
+    emit('event')
+    expect(onPub).toHaveBeenCalledTimes(1)  // 3 个 listener，onPub 只触发一次
+  })
+
+  test('emit 多个命名空间时，onPub 每个命名空间触发一次', () => {
+    const onPub = jest.fn()
+    const { on, emit } = useEvent(undefined, undefined, onPub)
+
+    on('event.ns1', jest.fn())
+    on('event.ns2', jest.fn())
+
+    emit('event.ns1 event.ns2')
+    expect(onPub).toHaveBeenCalledTimes(2)  // 两个命名空间，各触发一次
+  })
+})
+
+describe('Defect 4: setMaxListeners 设置小于默认值时输出警告', () => {
+  test('设置小于默认值时输出 console.warn', () => {
+    const { setMaxListeners, getMaxListeners } = useEvent()
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
+
+    setMaxListeners(10)
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('10'))
+    expect(getMaxListeners()).toEqual(1000)
+    warnSpy.mockRestore()
+  })
+})
+
+describe('parseEventName: namespace 字段', () => {
+  test('无命名空间时 namespace 为空字符串', () => {
+    expect(parseEventName('event')).toEqual([{ name: 'event', namespace: '' }])
+  })
+
+  test('有命名空间时 namespace 为对应值', () => {
+    expect(parseEventName('event.ns')).toEqual([{ name: 'event', namespace: 'ns' }])
+  })
+
+  test('多命名空间时展开为多条记录', () => {
+    expect(parseEventName('event.ns1.ns2')).toEqual([
+      { name: 'event', namespace: 'ns1' },
+      { name: 'event', namespace: 'ns2' },
+    ])
   })
 })

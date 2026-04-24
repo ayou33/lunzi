@@ -2,7 +2,7 @@ export type EventName<T extends string = string> = T | T[]
 
 export type EventType = {
   name: string;
-  type: string;
+  namespace: string;
 }
 
 /**
@@ -37,12 +37,12 @@ export function parseEventName (name: EventName): EventType[] {
     if (!eventName) continue
     
     if (parts.length === 1) {
-      result.push({ name: eventName, type: '' })
+      result.push({ name: eventName, namespace: '' })
     } else {
       for (let i = 1; i < parts.length; i++) {
-        const type = parts[i]?.trim()
-        if (type) {
-          result.push({ name: eventName, type })
+        const ns = parts[i]?.trim()
+        if (ns) {
+          result.push({ name: eventName, namespace: ns })
         }
       }
     }
@@ -68,7 +68,7 @@ export function useEventName (event: EventName, use: (name: string, type: string
   
   for (const eventType of eventTypes) {
     if (eventType.name) {
-      use(eventType.name, eventType.type)
+      use(eventType.name, eventType.namespace)
     }
   }
 }
@@ -93,7 +93,7 @@ export function makeListener<T = unknown> (listener: EventListener<T>): EventLis
 
 export type EventRecord<T = unknown> = {
   name: string;
-  type: string;
+  namespace: string;
   listener: EventListener<T>;
   rawListener: EventListener<T>;
   options?: EventOptions;
@@ -135,18 +135,18 @@ export function useEvent<T extends string = string> (
    * @param type 类型
    * @returns 监听器数组
    */
-  function ensureListenerArray<U = unknown> (name: string, type: string): EventRecord<U>[] {
+  function ensureListenerArray<U = unknown> (name: string, namespace: string): EventRecord<U>[] {
     if (!__events.has(name)) {
       __events.set(name, new Map())
     }
     
     const typeMap = __events.get(name)!
     
-    if (!typeMap.has(type)) {
-      typeMap.set(type, [])
+    if (!typeMap.has(namespace)) {
+      typeMap.set(namespace, [])
     }
     
-    return typeMap.get(type) as EventRecord<U>[]
+    return typeMap.get(namespace) as EventRecord<U>[]
   }
 
   /**
@@ -171,10 +171,12 @@ export function useEvent<T extends string = string> (
       const record = listeners[i]
       if (record.rawListener === listener) {
         onRemove?.(record.name, record.listener, record.options)
+        listeners.splice(i, 1)
         record.listener = scopedListener
         record.options = options
         record.priority = priority!
         record.addTime = addTime!
+        insertListenerByPriority(listeners, record)
         onSub?.(record.name, scopedListener, options)
         return true
       }
@@ -229,9 +231,9 @@ export function useEvent<T extends string = string> (
     
     let error: Error | null = null
     
-    useEventName(event, (name, type) => {
+    useEventName(event, (name, namespace) => {
       try {
-        const listeners = ensureListenerArray(name, type)
+        const listeners = ensureListenerArray(name, namespace)
         
         // 查找是否已存在相同的监听器
         const replaced = replaceExistingListener(
@@ -246,7 +248,7 @@ export function useEvent<T extends string = string> (
         if (!replaced) {
           const newRecord: EventRecord<U> = {
             name,
-            type,
+            namespace,
             listener: scopedListener,
             rawListener: listener,
             options,
@@ -372,7 +374,7 @@ export function useEvent<T extends string = string> (
     }
   }
 
-  function off<U = unknown> (event: EventName<T>, listener?: EventListener<U>): void {
+  function off<U = unknown> (event: EventName<T> | '*', listener?: EventListener<U>): void {
     if (event === '*') {
       // 清除所有事件
       __events.forEach((typeMap) => {
@@ -392,12 +394,12 @@ export function useEvent<T extends string = string> (
       return
     }
     
-    useEventName(event, (name, type) => {
+    useEventName(event, (name, namespace) => {
       if (name === '*') {
         // 处理 *.ns 格式的事件名，通过命名空间取消订阅
         __events.forEach((typeMap, eventName) => {
-          if (typeMap.has(type)) {
-            applyFilterToTypeMap(typeMap, type, listener)
+          if (typeMap.has(namespace)) {
+            applyFilterToTypeMap(typeMap, namespace, listener)
             cleanupTypeMap(typeMap, eventName)
           }
         })
@@ -405,7 +407,7 @@ export function useEvent<T extends string = string> (
         return
       } else {
         const typeMap = __events.get(name)!
-        applyFilterToTypeMap(typeMap, type, listener)
+        applyFilterToTypeMap(typeMap, namespace, listener)
         cleanupTypeMap(typeMap, name)
       }
     })
@@ -420,10 +422,10 @@ export function useEvent<T extends string = string> (
     eventName: string,
     dataSet: U[]
   ): void {
-    for (const record of listeners) {
+    const snapshot = listeners.slice()
+    for (const record of snapshot) {
       try {
         record.listener(event, ...dataSet)
-        onPub?.(eventName, event, ...dataSet)
       } catch (error) {
         console.error(`Error in event listener for "${eventName}":`, error)
       }
@@ -464,8 +466,10 @@ export function useEvent<T extends string = string> (
       return
     }
     
-    useEventName(event, (name, type) => {
+    useEventName(event, (name, namespace) => {
       const e = new CustomEvent(name, { detail: dataSet })
+      
+      onPub?.(name, e, ...dataSet)
       
       // 更新统计信息
       const stat = __eventStats.get(name) || { count: 0, lastEmit: 0 }
@@ -476,14 +480,14 @@ export function useEvent<T extends string = string> (
       // 1. 执行通配符监听器（优先级已经在添加时排序）
       if (__events.has('*')) {
         const wildcardTypeMap = __events.get('*')!
-        // 通配符监听器总是执行，不管 type 是什么，所以用空字符串让它执行所有
+        // 通配符监听器总是执行，不管 namespace 是什么，所以用空字符串让它执行所有
         executeListenersFromTypeMap(wildcardTypeMap, '', e, name, dataSet)
       }
       
       // 2. 执行指定事件的监听器（优先级已经在添加时排序）
       if (__events.has(name)) {
         const typeMap = __events.get(name)!
-        executeListenersFromTypeMap(typeMap, type, e, name, dataSet)
+        executeListenersFromTypeMap(typeMap, namespace, e, name, dataSet)
       }
     })
   }
@@ -526,7 +530,7 @@ export function useEvent<T extends string = string> (
     parsed.forEach(ev => {
       if (__events.has(ev.name)) {
         const typeMap = __events.get(ev.name)!
-        count += countListenersFromTypeMap(typeMap, ev.type)
+        count += countListenersFromTypeMap(typeMap, ev.namespace)
       }
     })
     
@@ -574,7 +578,7 @@ export function useEvent<T extends string = string> (
     parsed.forEach(ev => {
       if (__events.has(ev.name)) {
         const typeMap = __events.get(ev.name)!
-        collectListenersFromTypeMap(typeMap, ev.type, listeners)
+        collectListenersFromTypeMap(typeMap, ev.namespace, listeners)
       }
     })
     
@@ -588,6 +592,9 @@ export function useEvent<T extends string = string> (
   function setMaxListeners (max: number): void {
     if (max < 0) {
       throw new TypeError('Max listeners must be a non-negative number')
+    }
+    if (max < DEFAULT_MAX_LISTENERS) {
+      console.warn(`setMaxListeners: ${max} is below the minimum ${DEFAULT_MAX_LISTENERS}, the value will remain ${DEFAULT_MAX_LISTENERS}`)
     }
     MAX_LISTENERS = Math.max(DEFAULT_MAX_LISTENERS, max)
   }
@@ -616,7 +623,7 @@ export function useEvent<T extends string = string> (
    * 清理所有事件
    */
   function clear (): void {
-    off('*' as EventName<T>)
+    off('*')
   }
   
   /**
@@ -625,7 +632,7 @@ export function useEvent<T extends string = string> (
   function debug () {
     const events: Array<{
       name: string;
-      type: string;
+      namespace: string;
       priority: number;
       addTime: number;
       options?: EventOptions;
@@ -635,7 +642,7 @@ export function useEvent<T extends string = string> (
         listeners.forEach(record => {
           events.push({
             name: record.name,
-            type: record.type,
+            namespace: record.namespace,
             priority: record.priority,
             addTime: record.addTime,
             options: record.options,
@@ -658,8 +665,12 @@ export function useEvent<T extends string = string> (
    * @param items 事件监听器配置数组
    * @returns 取消订阅函数数组
    */
-  function batchOn<U = unknown>(items: Array<{ event: EventName<T>; listener: EventListener<U>; options?: EventOptions }>): (() => void)[] {
-    return items.map(item => on<U>(item.event, item.listener, item.options));
+  function batchOn<U = unknown>(items: Array<{ event: EventName<T>; listener: EventListener<U>; options?: EventOptions }>): { unsubscribes: (() => void)[]; unsubscribeAll: () => void } {
+    const unsubscribes = items.map(item => on<U>(item.event, item.listener, item.options))
+    return {
+      unsubscribes,
+      unsubscribeAll: () => unsubscribes.forEach(fn => fn()),
+    }
   }
 
   /**
@@ -702,7 +713,7 @@ export type EventBatchItem<T extends string = string, U = unknown> = {
 export type UseEventReturn<T extends string = string> = {
   on: <U = unknown>(event: EventName<T>, listener: EventListener<U>, options?: EventOptions) => () => void;
   once: <U = unknown>(event: EventName<T>, listener: EventListener<U>, options?: EventOptions) => () => void;
-  off: <U = unknown>(event: EventName<T>, listener?: EventListener<U>) => void;
+  off: <U = unknown>(event: EventName<T> | '*', listener?: EventListener<U>) => void;
   emit: <U = unknown>(event: EventName<T>, ...dataSet: U[]) => void;
   listenerCount: (event?: EventName<T>) => number;
   eventNames: () => string[];
@@ -717,7 +728,7 @@ export type UseEventReturn<T extends string = string> = {
     eventNames: string[];
     events: Array<{
       name: string;
-      type: string;
+      namespace: string;
       priority: number;
       addTime: number;
       options?: EventOptions;
@@ -727,9 +738,9 @@ export type UseEventReturn<T extends string = string> = {
   /**
    * 批量添加事件监听器
    * @param items 事件监听器配置数组
-   * @returns 取消订阅函数数组
+   * @returns 取消订阅函数数组及一键取消函数
    */
-  batchOn: <U = unknown>(items: EventBatchItem<T, U>[]) => (() => void)[];
+  batchOn: <U = unknown>(items: EventBatchItem<T, U>[]) => { unsubscribes: (() => void)[]; unsubscribeAll: () => void };
   /**
    * 批量删除事件监听器
    * @param items 事件监听器配置数组
