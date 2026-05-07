@@ -160,10 +160,21 @@ export function stateFetch (parallel = 3) {
   function cancel (idOrLabel: string | string[], reason?: string) {
     queue.cancel(idOrLabel, reason)
   }
+
+  function clearCache (urlPrefix?: string) {
+    if (urlPrefix) {
+      for (const key of cache.keys()) {
+        if (key.startsWith(urlPrefix)) cache.delete(key)
+      }
+    } else {
+      cache.clear()
+    }
+  }
   
   return {
     send,
     cancel,
+    clearCache,
     on: queue.on,
   }
 }
