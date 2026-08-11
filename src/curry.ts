@@ -21,7 +21,7 @@ type AnyFunction = (...args: any[]) => any
  * @param received  Arguments accumulated so far (may contain placeholders).
  */
 function _curryN (required: number, fn: AnyFunction, received: any[] = []): AnyFunction {
-  return function () {
+  return function (...args: any[]) {
     /**
      * 该数组中可能存在placeholder元素
      */
@@ -31,19 +31,19 @@ function _curryN (required: number, fn: AnyFunction, received: any[] = []): AnyF
     let combinedIndex = 0
     let argIndex = 0
 
-    while (combinedIndex < received.length || argIndex < arguments.length) {
+    while (combinedIndex < received.length || argIndex < args.length) {
       let argument: any
 
       /**
-       * 利用arguments替换received中的placeholder
+       * 利用args替换received中的placeholder
        */
       if (
         combinedIndex < received.length &&
-        (!isPlaceholder(received[combinedIndex]) || argIndex >= arguments.length)
+        (!isPlaceholder(received[combinedIndex]) || argIndex >= args.length)
       ) {
         argument = received[combinedIndex]
       } else {
-        argument = arguments[argIndex]
+        argument = args[argIndex]
         argIndex++
       }
 

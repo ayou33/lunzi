@@ -128,13 +128,14 @@ class BitCount {
 
   /** Returns all digit values from most-significant to least-significant. */
   values (prune = this.options.autoPrune) {
-    const values: number[] = [this._number]
-    let parent = this.parent
+    const values: number[] = []
+    let node: BitCount | null = this
 
-    while (parent) {
-      values.unshift(parent._number)
-      parent = parent.parent
+    while (node) {
+      values.push(node._number)
+      node = node.parent
     }
+    values.reverse()
 
     if (prune) {
       // Remove leading zeros, but leave at least one digit if the value is zero.

@@ -26,6 +26,8 @@ export function createSignal<T> (value: T) {
   }
   
   const write = (nextValue: T) => {
+    // 同值写入不触发依赖重跑（Object.is 处理 NaN / ±0 语义）
+    if (Object.is(value, nextValue)) return
     value = nextValue
     
     for (const sub of [...subscriptions]) {

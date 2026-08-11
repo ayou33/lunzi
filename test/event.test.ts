@@ -488,21 +488,18 @@ describe('事件触发', () => {
   })
 
   test('绑定溢出异常', () => {
-    const { on, getMaxListeners, listenerCount, setMaxListeners } = useEvent()
-    const max = getMaxListeners() + 1
-    setMaxListeners(max)
+    const { on, getMaxListeners, listenerCount } = useEvent()
+    const max = getMaxListeners() // 默认 1000
 
-    const bind = () => {
-      const event = 'event'
-      const handler = () => {}
-
-      for (let i = 0; i < max; i ++) {
-        on(event + i, handler)
-      }
+    // 恰好注册 max 个监听器
+    for (let i = 0; i < max; i ++) {
+      on('event' + i, () => {})
     }
+    expect(listenerCount()).toBe(max)
 
-    expect(bind).toThrowError(/Reached the maximum/)
-    expect(listenerCount()).toEqual(max)
+    // 第 max+1 个被拒绝，且状态一致（未被注册）
+    expect(() => on('event-extra', () => {})).toThrowError(/Reached the maximum/)
+    expect(listenerCount()).toBe(max)
   })
 })
 
@@ -1050,5 +1047,76 @@ describe('parseEventName: namespace 字段', () => {
       { name: 'event', namespace: 'ns1' },
       { name: 'event', namespace: 'ns2' },
     ])
+  })
+})
+
+// ─── 优化相关：parseEventName 缓存 ────────────────────────────────────────────
+
+describe('parseEventName 缓存', () => {
+  test('重复解析返回一致的 EventType 对象', () => {
+    const a = parseEventName('memo.event.ns')
+    const b = parseEventName('memo.event.ns')
+    expect(a).toEqual(b)
+    expect(a[0]).toBe(b[0])
+  })
+
+  test('前后空格不影响缓存命中', () => {
+    expect(parseEventName('memo.event.ns')[0]).toBe(parseEventName('  memo.event.ns  ')[0])
+  })
+})
+
+// ─── 优化相关：resetStats 与统计上限 ──────────────────────────────────────────
+
+describe('resetStats 与统计上限', () => {
+  test('resetStats 清空统计信息', () => {
+    const { on, emit, getEventStats, resetStats } = useEvent()
+    on('rsEvt', () => {})
+    emit('rsEvt', 1)
+    emit('rsEvt', 2)
+    expect((getEventStats('rsEvt') as EventStats).count).toBe(2)
+
+    resetStats()
+
+    expect((getEventStats('rsEvt') as EventStats).count).toBe(0)
+    expect(Object.keys(getEventStats() as Record<string, EventStats>)).toHaveLength(0)
+  })
+
+  test('统计信息超过上限时淘汰最旧事件', () => {
+    const { emit, getEventStats } = useEvent()
+    for (let i = 0; i < 1001; i++) {
+      emit('capEvt' + i)
+    }
+    const all = getEventStats() as Record<string, EventStats>
+    const keys = Object.keys(all)
+    expect(keys).toHaveLength(1000)
+    expect(all['capEvt0']).toBeUndefined()
+    expect(all['capEvt1000']).toBeDefined()
+  })
+})
+// ─── 优化相关：listeners 命名空间收集 ─────────────────────────────────────────
+
+describe('listeners 命名空间收集', () => {
+  test('listeners 返回指定命名空间的原始监听器', () => {
+    const { on, listeners } = useEvent()
+    const h = jest.fn()
+    on('evt.ns', h)
+    expect(listeners('evt.ns')).toContain(h)
+  })
+})
+// ─── 优化相关：onRemove 抛错被捕获 ────────────────────────────────────────────
+
+describe('onRemove 抛错容错', () => {
+  test('onRemove 抛错时不会中断 off', () => {
+    const { on, off } = useEvent(
+      () => {},
+      () => { throw new Error('boom') },
+    )
+    const h = jest.fn()
+    on('err.evt', h)
+    // filterListeners 路径：单个取消
+    expect(() => off('err.evt')).not.toThrow()
+    // off('*') 路径：存在监听器时全量取消
+    on('err2.evt', h)
+    expect(() => off('*')).not.toThrow()
   })
 })

@@ -11,10 +11,25 @@ import stateFetch, { StateFetchConfig } from '../stateFetch'
  */
 export const axios = _axios
 
+let cacheBust = true
+
+/**
+ * 配置 fetch.axios 的请求行为
+ * @param options.cacheBust 是否在 GET/POST 请求中追加 `_t` 时间戳（默认 true）
+ */
+export function configFetchAxios (options: { cacheBust?: boolean }) {
+  if (typeof options.cacheBust === 'boolean') {
+    cacheBust = options.cacheBust
+  }
+  return { cacheBust }
+}
+
 /**
  * 在请求中添加时间戳
  */
 axios.interceptors.request.use(config => {
+  if (!cacheBust) return config
+
   if (config.method === 'get') {
     config.params = {
       ...config.params,

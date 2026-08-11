@@ -3,6 +3,16 @@
  * Author: 阿佑[ayooooo@petalmail.com]
  * Date: 2024/4/8 23:29
  */
+// 惰性初始化：部分测试/SSR 环境在模块加载后才注入 TextEncoder
+let _encoder: TextEncoder | null = null
+
+function getEncoder (): TextEncoder {
+  return _encoder ?? (_encoder = new TextEncoder())
+}
+
+const encodeCache = new Map<string, string>()
+const MAX_ENCODE_CACHE = 512
+
 const DefaultOptions = {
   groupDelimiter: ':',
   pathDelimiter: '.',
@@ -36,15 +46,26 @@ export function config (key: Keys, value: string) {
 }
 
 function encode (value: unknown) {
-  return [...new TextEncoder().encode(JSON.stringify(value))].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  const key = JSON.stringify(value)
+  const cached = encodeCache.get(key)
+  if (cached) return cached
+  
+  const hex = [...getEncoder().encode(key)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  
+  if (encodeCache.size >= MAX_ENCODE_CACHE) {
+    const oldest = encodeCache.keys().next().value
+    if (oldest !== undefined) encodeCache.delete(oldest)
+  }
+  encodeCache.set(key, hex)
+  return hex
 }
 
 function isGroupSelector (key: string) {
-  return key.split(options.groupDelimiter).length > 1
+  return key.includes(options.groupDelimiter)
 }
 
 function isPathSelector (key: string) {
-  return key.split(options.pathDelimiter).length > 1
+  return key.includes(options.pathDelimiter)
 }
 
 function parseGroupValue (name: string, p: string | null) {

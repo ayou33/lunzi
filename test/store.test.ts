@@ -298,3 +298,73 @@ describe('config — custom delimiters', () => {
   })
 })
 
+
+// ─── 编码与选择器（优化回归） ────────────────────────────────────────────────
+
+describe('store 编码与选择器', () => {
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  test('同一 key 反复读写保持一致', () => {
+    for (let i = 0; i < 50; i++) {
+      localSet('repeat:key.name', `v${i}`)
+    }
+    expect(localGet('repeat:key.name')).toBe('v49')
+  })
+
+  test('path 选择器深层路径正常', () => {
+    localSet('obj.a.b.c', 1)
+    expect(localGet('obj.a.b.c')).toBe(1)
+    localSet('obj.a.b', { x: 2 })
+    expect(localGet('obj.a.b.x')).toBe(2)
+  })
+})
+describe('store 边界路径（优化回归）', () => {
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  test('大量不同 key 不破坏编码缓存', () => {
+    for (let i = 0; i < 600; i++) {
+      const k = 'bulkKey' + i
+      localSet(k, i)
+      expect(localGet(k)).toBe(String(i))
+    }
+  })
+
+  test('path 值非法 JSON 时 get 返回 null', () => {
+    localSet('obj', '{bad')
+    expect(localGet('obj.x')).toBeNull()
+  })
+
+  test('path 写入遇到非法 JSON 时安全跳过', () => {
+    localSet('obj', '{bad')
+    localSet('obj.x', 1)
+    expect(localGet('obj.x')).toBeNull()
+  })
+
+  test('removePath 遇到非法 JSON 时安全跳过', () => {
+    localSet('obj', '{bad')
+    expect(() => localRemove('obj.x')).not.toThrow()
+  })
+
+  test('removePath 中间路径缺失时安全返回', () => {
+    localSet('obj.a', 1)
+    localRemove('obj.b.c')
+    expect(localGet('obj.a')).toBe(1)
+    expect(localGet('obj.b.c')).toBeNull()
+  })
+
+  test('removePath 支持括号索引删除数组元素', () => {
+    localSet('list.0', 'a')
+    localSet('list.1', 'b')
+    expect(localGet('list.0')).toBe('a')
+    expect(localGet('list.1')).toBe('b')
+
+    localRemove('list.[1]')
+
+    expect(localGet('list.0')).toBe('a')
+    expect(localGet('list.1')).toBeUndefined()
+  })
+})

@@ -58,3 +58,23 @@ describe('reactive', () => {
     clear()
   })
 })
+
+describe('reactive 优化', () => {
+  test('same-value writes do not re-run effects', () => {
+    const [signal, setSignal] = createSignal(0)
+    const effect = jest.fn(() => { signal() })
+    const clear = createEffect(effect)
+    expect(effect).toHaveBeenCalledTimes(1)
+
+    setSignal(0) // 同值 → 不触发
+    expect(effect).toHaveBeenCalledTimes(1)
+
+    setSignal(1)
+    expect(effect).toHaveBeenCalledTimes(2)
+
+    setSignal(1) // 同值 → 不触发
+    expect(effect).toHaveBeenCalledTimes(2)
+
+    clear()
+  })
+})

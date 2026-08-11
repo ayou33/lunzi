@@ -124,3 +124,18 @@ describe('BitCount', () => {
     })
   })
 })
+
+describe('BitCount.values() 优化回归', () => {
+  it('多位数顺序正确（从高到低）', () => {
+    const bitCount = new BitCount(98765, null, 10)
+    expect(bitCount.values()).toEqual([9, 8, 7, 6, 5])
+    expect(bitCount.value()).toBe(98765)
+  })
+})
+describe('BitCount.values() autoPrune 前导零', () => {
+  it('autoPrune 移除前导零并保留有效数字', () => {
+    const parent = new BitCount(0, null, { radix: 10 })
+    const bitCount = new BitCount(5, parent, { radix: 10, autoPrune: true })
+    expect(bitCount.values()).toEqual([5])
+  })
+})

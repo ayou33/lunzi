@@ -10,6 +10,9 @@ export type EventType = {
  * @param name 事件名或事件名数组
  * @returns 解析后的事件类型数组
  */
+const MAX_PARSE_CACHE = 1000
+const parseEventNameCache = new Map<string, EventType[]>()
+
 export function parseEventName (name: EventName): EventType[] {
   if (name === null || name === undefined) return []
   
@@ -24,6 +27,10 @@ export function parseEventName (name: EventName): EventType[] {
   
   const trimmedName = name.trim()
   if (!trimmedName) return []
+
+  // 缓存常见单事件名的解析结果，避免每次 on/off/emit 重复 split/分配对象
+  const cached = parseEventNameCache.get(trimmedName)
+  if (cached) return cached.slice()
   
   const result: EventType[] = []
   const events = trimmedName.split(/\s+/)
@@ -48,7 +55,13 @@ export function parseEventName (name: EventName): EventType[] {
     }
   }
   
-  return result
+  if (parseEventNameCache.size >= MAX_PARSE_CACHE) {
+    const oldest = parseEventNameCache.keys().next().value
+    if (oldest !== undefined) parseEventNameCache.delete(oldest)
+  }
+  parseEventNameCache.set(trimmedName, result)
+
+  return result.slice()
 }
 
 /**
@@ -102,6 +115,8 @@ export type EventRecord<T = unknown> = {
 }
 
 const DEFAULT_MAX_LISTENERS = 1000
+
+const MAX_EVENT_STATS = 1000
 
 /**
  * 事件管理器
@@ -246,6 +261,11 @@ export function useEvent<T extends string = string> (
         )
         
         if (!replaced) {
+          // 先检查上限，拒绝时保持状态一致（不注册、不递增）
+          if (__totalListeners >= MAX_LISTENERS) {
+            throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
+          }
+
           const newRecord: EventRecord<U> = {
             name,
             namespace,
@@ -261,9 +281,7 @@ export function useEvent<T extends string = string> (
           
           onSub?.(name, scopedListener, options)
           
-          if (__totalListeners >= MAX_LISTENERS) {
-            throw new Error(`Reached the maximum events count: ${MAX_LISTENERS}`)
-          } else if (__totalListeners / MAX_LISTENERS > 0.9) {
+          if (__totalListeners / MAX_LISTENERS > 0.9) {
             console.warn(`The number of events is too large: ${__totalListeners}`)
           }
         }
@@ -476,6 +494,12 @@ export function useEvent<T extends string = string> (
       stat.count++
       stat.lastEmit = Date.now()
       __eventStats.set(name, stat)
+
+      // 防止动态事件名导致统计信息无限增长
+      if (__eventStats.size > MAX_EVENT_STATS) {
+        const oldest = __eventStats.keys().next().value
+        if (oldest !== undefined) __eventStats.delete(oldest)
+      }
       
       // 1. 执行通配符监听器（优先级已经在添加时排序）
       if (__events.has('*')) {
@@ -620,6 +644,13 @@ export function useEvent<T extends string = string> (
   }
   
   /**
+   * 清空事件统计信息
+   */
+  function resetStats (): void {
+    __eventStats.clear()
+  }
+
+  /**
    * 清理所有事件
    */
   function clear (): void {
@@ -692,6 +723,7 @@ export function useEvent<T extends string = string> (
     setMaxListeners,
     getMaxListeners,
     getEventStats,
+    resetStats,
     clear,
     debug,
     batchOn,
@@ -721,6 +753,10 @@ export type UseEventReturn<T extends string = string> = {
   setMaxListeners: (max: number) => void;
   getMaxListeners: () => number;
   getEventStats: (event?: string) => EventStats | Record<string, EventStats>;
+  /**
+   * 清空事件统计信息
+   */
+  resetStats: () => void;
   clear: () => void;
   debug: () => {
     totalListeners: number;
