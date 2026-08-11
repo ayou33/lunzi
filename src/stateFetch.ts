@@ -42,7 +42,22 @@ function parseRequestId (config: StateConfig): string {
   return config.url + '?' + params.toString()
 }
 
-export function stateFetch (parallel = 3) {
+export type StateFetchOptions = {
+  /** Max cache entries; the least-recently-used entry is evicted when exceeded */
+  maxCacheSize?: number
+  /** Interval in ms to clean up expired cache entries, 0 to disable auto cleanup */
+  cleanupInterval?: number
+  /** Enable auto cleanup (default: true) */
+  autoCleanup?: boolean
+}
+
+export function stateFetch (parallel = 3, options: StateFetchOptions = {}) {
+  const {
+    maxCacheSize = 1000,
+    cleanupInterval = 60000,
+    autoCleanup = true,
+  } = options
+
   const queue = stateQueue(parallel)
   /**
    * requestId相同的请求会被合并处理
@@ -52,12 +67,68 @@ export function stateFetch (parallel = 3) {
     expires: number
     resp: unknown | null
   }>()
-  
+
+  /** Cleanup timer for expired cache entries */
+  let cleanupTimer: ReturnType<typeof setInterval> | null = null
+
+  /**
+   * Cleanup expired cache entries
+   */
+  function cleanupExpiredCache () {
+    const now = Date.now()
+    for (const [key, value] of cache) {
+      if (now >= value.expires) {
+        cache.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Enforce the cache size limit using LRU eviction. The Map preserves
+   * insertion order and send() refreshes recency on every cache hit, so
+   * evicting from the head removes the least-recently-used entries.
+   */
+  function enforceCacheLimit () {
+    if (cache.size <= maxCacheSize) return
+
+    const entriesToRemove = cache.size - maxCacheSize
+    const keys = cache.keys()
+    for (let i = 0; i < entriesToRemove; i++) {
+      const key = keys.next().value
+      if (key !== undefined) {
+        cache.delete(key)
+      }
+    }
+  }
+
   function respond (requestId: string, error: Error | null = null, result?: unknown) {
     processing.get(requestId)?.forEach(cb => cb(error, result))
     processing.delete(requestId)
   }
-  
+
+  /**
+   * Start the cleanup timer lazily after the first cache write.
+   */
+  function startCleanupTimer () {
+    if (cleanupTimer === null && cleanupInterval > 0 && autoCleanup) {
+      cleanupTimer = setInterval(cleanupExpiredCache, cleanupInterval)
+      // Don't block process exit in Node.js environments
+      if (typeof cleanupTimer.unref === 'function') {
+        cleanupTimer.unref()
+      }
+    }
+  }
+
+  /**
+   * Stop the cleanup timer.
+   */
+  function stopCleanupTimer () {
+    if (cleanupTimer !== null) {
+      clearInterval(cleanupTimer)
+      cleanupTimer = null
+    }
+  }
+
   function send<T, C extends StateConfig> (fetch: (config: C) => Promise<T>, config: C) {
     return new Promise<T>((resolve, reject) => {
       const requestId = parseRequestId(config)
@@ -99,6 +170,9 @@ export function stateFetch (parallel = 3) {
             if (resp && Date.now() < expires) {
               settled = true
               controller.signal.removeEventListener('abort', onAbort)
+              // Refresh recency so LRU eviction keeps recently used entries
+              cache.delete(requestId)
+              cache.set(requestId, { expires, resp })
               respond(requestId, null, resp)
               return resolve(resp as T)
             }
@@ -120,6 +194,8 @@ export function stateFetch (parallel = 3) {
                   expires: Date.now() + config.expireIn,
                   resp,
                 })
+                enforceCacheLimit()
+                startCleanupTimer()
               }
             })
             .catch((err) => {
@@ -134,8 +210,7 @@ export function stateFetch (parallel = 3) {
       // Obtain the controller for the enqueued task so we can register the
       // abort listener eagerly — this covers the case where the task is
       // cancelled while still waiting in the queue (run() is never called).
-      const taskController = queue.getTasks().find(t => t.id === taskId)?.controller
-        ?? queue.getRunningTasks().find(t => t.id === taskId)?.controller
+      const taskController = queue.getTask(taskId)?.controller
 
       function onAbort () {
         log('abort task', requestId)
@@ -156,7 +231,7 @@ export function stateFetch (parallel = 3) {
       }
     })
   }
-  
+
   function cancel (idOrLabel: string | string[], reason?: string) {
     queue.cancel(idOrLabel, reason)
   }
@@ -170,11 +245,21 @@ export function stateFetch (parallel = 3) {
       cache.clear()
     }
   }
-  
+
+  /**
+   * Destroy the stateFetch instance, cleaning up all resources.
+   */
+  function destroy () {
+    stopCleanupTimer()
+    cache.clear()
+    queue.destroy()
+  }
+
   return {
     send,
     cancel,
     clearCache,
+    destroy,
     on: queue.on,
   }
 }

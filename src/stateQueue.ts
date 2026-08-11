@@ -50,6 +50,7 @@ export interface StateQueue {
   cancel: (idOrLabel: string | string[], reason?: string) => void;
   getTasks: () => Task[];
   getRunningTasks: () => Task[];
+  getTask: (id: string) => Task | undefined;
   on: <T>(state: QueueState, handler: (e: Event, d: T) => void, oneOff?: boolean) => VoidFunction;
   destroy: () => void;
 }
@@ -70,6 +71,7 @@ function makeId (): string {
 export function stateQueue (parallel: number = 1): StateQueue {
   const tasks: Task[] = []
   const running: Task[] = []
+  const taskMap = new Map<string, Task>()
 
   const { on, once, emit, off } = useEvent()
 
@@ -146,10 +148,35 @@ export function stateQueue (parallel: number = 1): StateQueue {
       // individual task results through the queue API.
       .catch(() => {})
       .finally(() => {
-        running.splice(running.indexOf(task), 1)
-
+        const index = running.indexOf(task)
+        if (index !== -1) {
+          running.splice(index, 1)
+        }
+        taskMap.delete(task.id)
         next()
       })
+  }
+
+  /**
+   * Binary search for the insertion position that keeps `tasks` sorted by
+   * descending priority. Returns the first index whose priority is lower than
+   * the target, or `tasks.length` when all existing priorities are higher or
+   * equal (which preserves FIFO order among equal priorities).
+   */
+  function findInsertPosition (targetPriority: number): number {
+    let low = 0
+    let high = tasks.length
+
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      if (tasks[mid].priority! < targetPriority) {
+        high = mid
+      } else {
+        low = mid + 1
+      }
+    }
+
+    return low
   }
 
   /**
@@ -160,13 +187,14 @@ export function stateQueue (parallel: number = 1): StateQueue {
    */
   function enqueue (task: TaskMeta | TaskMeta['run'], runType: TaskRunType = TaskRunType.AUTO): string {
     const taskObject = buildTaskObject(task)
+    taskMap.set(taskObject.id, taskObject)
 
     if (runType === TaskRunType.IMMEDIATE) {
       run(taskObject)
     } else {
-      const position = tasks.findIndex(({ priority }) => priority! < taskObject.priority!)
-      tasks.splice(position === -1 ? tasks.length : position, 0, taskObject)
-      
+      const position = findInsertPosition(taskObject.priority!)
+      tasks.splice(position, 0, taskObject)
+
       if (runType === TaskRunType.AUTO) next()
     }
 
@@ -193,7 +221,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
   function emitBusy () {
     emit(stateEvent(QueueState.BUSY))
   }
-  
+
   /**
    * Function to emit a running event.
    */
@@ -238,6 +266,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
     for (const task of tasks) {
       if (shouldCancel(task)) {
         task.controller.abort(reason)
+        taskMap.delete(task.id)
       } else {
         kept.push(task)
       }
@@ -250,7 +279,10 @@ export function stateQueue (parallel: number = 1): StateQueue {
      * @warn 运行中的任务取消是一个异步操作 当前事件循环周期结束时才会完成操作
      */
     running.forEach(task => {
-      if (shouldCancel(task)) task.controller.abort(reason)
+      if (shouldCancel(task)) {
+        task.controller.abort(reason)
+        taskMap.delete(task.id)
+      }
     })
 
     // Do NOT call next() here: the aborted tasks are still in `running[]` at
@@ -258,14 +290,24 @@ export function stateQueue (parallel: number = 1): StateQueue {
     // naturally by .finally() once the abort resolves, avoiding a spurious
     // BUSY event and a double-next race condition.
   }
-  
+
+  /**
+   * Look up a task (queued or running) by id.
+   * @returns {Task | undefined} The task, or undefined if it no longer exists.
+   */
+  function getTask (id: string) {
+    return taskMap.get(id)
+  }
+
   function destroy () {
     tasks.length = 0
-    
+
     running.forEach(task => task.controller.abort())
-    
+
     running.length = 0
-    
+
+    taskMap.clear()
+
     off('*')
   }
 
@@ -276,6 +318,7 @@ export function stateQueue (parallel: number = 1): StateQueue {
     cancel,
     getTasks: () => tasks,
     getRunningTasks: () => running,
+    getTask,
     destroy,
   }
 }

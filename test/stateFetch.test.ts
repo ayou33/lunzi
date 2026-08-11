@@ -166,7 +166,7 @@ describe('send', () => {
 
     test('expired cache: triggers a real fetch', async () => {
       jest.useFakeTimers()
-      const sf = stateFetch()
+      const sf = stateFetch(3, { autoCleanup: false })
       const fetch = mockFetch('fresh', 0)
 
       // Prime cache with a 10 ms TTL.
@@ -186,7 +186,8 @@ describe('send', () => {
     })
 
     test('no cache when expireIn is not set', async () => {
-      const sf = stateFetch()
+      const sf = stateFetch(3, { autoCleanup: false })
+
       const fetch = mockFetch('no-cache', 0)
 
       await sf.send(fetch, { url: '/api/nc' })
@@ -215,7 +216,8 @@ describe('send', () => {
     })
 
     test('abort after settle does not cause a double-rejection', async () => {
-      const sf = stateFetch(1)
+      const sf = stateFetch(1, { autoCleanup: false })
+
       const fetch = mockFetch('done', 10)
       const id = 'settle-test'
 
@@ -266,7 +268,7 @@ describe('cancel', () => {
 describe('on', () => {
   test('forwards queue state events', async () => {
     const { QueueState } = await import('../src/stateQueue')
-    const sf = stateFetch(1)
+    const sf = stateFetch(1, { autoCleanup: false })
 
     const idleHandler = jest.fn()
     sf.on(QueueState.IDLE, idleHandler)
@@ -275,5 +277,187 @@ describe('on', () => {
     await tick(20)
 
     expect(idleHandler).toHaveBeenCalled()
+  })
+})
+
+// ─── cache eviction (LRU) ─────────────────────────────────────────────────────
+
+describe('cache eviction (LRU)', () => {
+  test('evicts least-recently-used entries when maxCacheSize is exceeded', async () => {
+    const sf = stateFetch(3, { maxCacheSize: 2, autoCleanup: false })
+    const fetch = mockFetch('v', 0)
+
+    await sf.send(fetch, { url: '/api/lru/a', expireIn: 60000 })
+    await sf.send(fetch, { url: '/api/lru/b', expireIn: 60000 })
+    await sf.send(fetch, { url: '/api/lru/c', expireIn: 60000 }) // evicts /a (oldest)
+
+    // /a was evicted → refetch
+    await sf.send(fetch, { url: '/api/lru/a', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(4)
+
+    // /c is still cached → no refetch
+    await sf.send(fetch, { url: '/api/lru/c', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(4)
+  })
+
+  test('a cache hit refreshes recency so recently used entries survive eviction', async () => {
+    const sf = stateFetch(3, { maxCacheSize: 2, autoCleanup: false })
+    const fetch = mockFetch('v', 0)
+
+    await sf.send(fetch, { url: '/api/lru/a', expireIn: 60000 })
+    await sf.send(fetch, { url: '/api/lru/b', expireIn: 60000 })
+    // Hit /a → order becomes [b, a]
+    await sf.send(fetch, { url: '/api/lru/a', expireIn: 60000 })
+    // Insert /c → cache full → evicts /b (least recently used), keeps /a
+    await sf.send(fetch, { url: '/api/lru/c', expireIn: 60000 })
+
+    // /a survived the eviction
+    await sf.send(fetch, { url: '/api/lru/a', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(3)
+
+    // /b was evicted → refetch
+    await sf.send(fetch, { url: '/api/lru/b', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(4)
+  })
+})
+
+// ─── cache cleanup timer ──────────────────────────────────────────────────────
+
+describe('cache cleanup timer', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
+  test('starts an interval after the first cache write and unrefs it', async () => {
+    jest.useFakeTimers()
+    const unref = jest.fn()
+    const setIntervalSpy = jest
+      .spyOn(globalThis, 'setInterval')
+      .mockImplementation((() => ({ unref })) as unknown as typeof globalThis.setInterval)
+
+    const sf = stateFetch(3, { cleanupInterval: 1000 })
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+
+    const p = sf.send(mockFetch('v', 0), { url: '/api/timer/start', expireIn: 60000 })
+    jest.runOnlyPendingTimers()
+    await p
+
+    expect(setIntervalSpy).toHaveBeenCalledTimes(1)
+    expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 1000)
+    expect(unref).toHaveBeenCalledTimes(1)
+  })
+
+  test('does not start a timer when autoCleanup is disabled', async () => {
+    jest.useFakeTimers()
+    const setIntervalSpy = jest.spyOn(globalThis, 'setInterval')
+    const sf = stateFetch(3, { cleanupInterval: 1000, autoCleanup: false })
+
+    const p = sf.send(mockFetch('v', 0), { url: '/api/timer/off', expireIn: 60000 })
+    jest.runOnlyPendingTimers()
+    await p
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+  })
+
+  test('does not start a timer when cleanupInterval is 0', async () => {
+    jest.useFakeTimers()
+    const setIntervalSpy = jest.spyOn(globalThis, 'setInterval')
+    const sf = stateFetch(3, { cleanupInterval: 0 })
+
+    const p = sf.send(mockFetch('v', 0), { url: '/api/timer/zero', expireIn: 60000 })
+    jest.runOnlyPendingTimers()
+    await p
+
+    expect(setIntervalSpy).not.toHaveBeenCalled()
+  })
+
+  test('cleanup timer purges expired cache entries', async () => {
+    jest.useFakeTimers()
+    const sf = stateFetch(3, { cleanupInterval: 1000 })
+    const fetch = mockFetch('fresh', 0)
+
+    const p1 = sf.send(fetch, { url: '/api/cleanup', expireIn: 500 })
+    jest.runOnlyPendingTimers()
+    await p1
+    expect(fetch).toHaveBeenCalledTimes(1)
+
+    // Entry expires at t=500; the interval fires at t=1000 and purges it.
+    jest.advanceTimersByTime(1000)
+
+    // Purged → next request refetches.
+    const p2 = sf.send(fetch, { url: '/api/cleanup', expireIn: 500 })
+    jest.runOnlyPendingTimers()
+    await p2
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ─── destroy ──────────────────────────────────────────────────────────────────
+
+describe('destroy', () => {
+  afterEach(() => {
+    jest.useRealTimers()
+    jest.restoreAllMocks()
+  })
+
+  test('stops the cleanup timer and clears the cache', async () => {
+    jest.useFakeTimers()
+    const clearIntervalSpy = jest.spyOn(globalThis, 'clearInterval')
+    const sf = stateFetch(3, { cleanupInterval: 1000 })
+    const fetch = mockFetch('v', 0)
+
+    const p1 = sf.send(fetch, { url: '/api/destroy/a', expireIn: 60000 })
+    jest.runOnlyPendingTimers()
+    await p1
+    expect(clearIntervalSpy).not.toHaveBeenCalled()
+
+    sf.destroy()
+    expect(clearIntervalSpy).toHaveBeenCalled()
+
+    // Cache was cleared → refetch.
+    const p2 = sf.send(fetch, { url: '/api/destroy/a', expireIn: 60000 })
+    jest.runOnlyPendingTimers()
+    await p2
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  test('is idempotent', () => {
+    const sf = stateFetch(3, { autoCleanup: false })
+    expect(() => {
+      sf.destroy()
+      sf.destroy()
+    }).not.toThrow()
+  })
+})
+
+// ─── clearCache ───────────────────────────────────────────────────────────────
+
+describe('clearCache', () => {
+  test('clears the entire cache', async () => {
+    const sf = stateFetch(3, { autoCleanup: false })
+    const fetch = mockFetch('v', 0)
+
+    await sf.send(fetch, { url: '/api/cc/a', expireIn: 60000 })
+    await sf.send(fetch, { url: '/api/cc/b', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(2)
+
+    sf.clearCache()
+    await sf.send(fetch, { url: '/api/cc/a', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(3)
+  })
+
+  test('clears only cache entries matching the url prefix', async () => {
+    const sf = stateFetch(3, { autoCleanup: false })
+    const fetch = mockFetch('v', 0)
+
+    await sf.send(fetch, { url: '/api/cc/keep', expireIn: 60000 })
+    await sf.send(fetch, { url: '/api/cc/drop', expireIn: 60000 })
+    expect(fetch).toHaveBeenCalledTimes(2)
+
+    sf.clearCache('/api/cc/drop')
+    await sf.send(fetch, { url: '/api/cc/drop', expireIn: 60000 }) // refetch
+    await sf.send(fetch, { url: '/api/cc/keep', expireIn: 60000 }) // still cached
+    expect(fetch).toHaveBeenCalledTimes(3)
   })
 })

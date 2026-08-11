@@ -301,3 +301,100 @@ describe('stateQueue', () => {
   })
 })
 
+
+// ─── getTask ──────────────────────────────────────────────────────────────────
+
+describe('stateQueue.getTask', () => {
+  let queue: ReturnType<typeof stateQueue>
+
+  beforeEach(() => {
+    queue = stateQueue()
+  })
+
+  afterEach(() => {
+    queue.destroy()
+  })
+
+  test('returns an enqueued (MANUAL) task by id', () => {
+    const id = queue.enqueue({ id: 'my-task', run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+    expect(queue.getTask(id)).toBeDefined()
+    expect(queue.getTask(id)?.id).toBe('my-task')
+  })
+
+  test('returns a running task by id', () => {
+    const id = queue.enqueue(delayTask(500), TaskRunType.IMMEDIATE)
+    expect(queue.getRunningTasks()).toHaveLength(1)
+    expect(queue.getTask(id)).toBeDefined()
+  })
+
+  test('returns undefined for an unknown id', () => {
+    expect(queue.getTask('no-such-id')).toBeUndefined()
+  })
+
+  test('returns undefined after the task completes', async () => {
+    const id = queue.enqueue({ run: jest.fn().mockResolvedValue('done') })
+    await tick()
+    expect(queue.getTask(id)).toBeUndefined()
+  })
+
+  test('returns undefined after the task is cancelled', async () => {
+    const id = queue.enqueue(delayTask(500), TaskRunType.IMMEDIATE)
+    queue.cancel(id)
+    await tick()
+    expect(queue.getTask(id)).toBeUndefined()
+  })
+
+  test('returns undefined after destroy', () => {
+    const id = queue.enqueue({ run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+    queue.destroy()
+    expect(queue.getTask(id)).toBeUndefined()
+  })
+})
+
+// ─── priority insertion (binary search) ───────────────────────────────────────
+
+describe('stateQueue.priority insertion', () => {
+  test('equal-priority tasks keep FIFO order', () => {
+    const q = stateQueue(1)
+    q.enqueue(delayTask(500), TaskRunType.IMMEDIATE) // occupy the only slot
+
+    const enqueue = (label: string) => q.enqueue({
+      priority: 5,
+      label,
+      run: jest.fn().mockResolvedValue(null),
+    }, TaskRunType.MANUAL)
+
+    enqueue('first')
+    enqueue('second')
+    enqueue('third')
+
+    expect(q.getTasks().map(t => t.label)).toEqual(['first', 'second', 'third'])
+    q.destroy()
+  })
+
+  test('inserts a new priority at the correct position', () => {
+    const q = stateQueue(1)
+    q.enqueue(delayTask(500), TaskRunType.IMMEDIATE) // occupy the only slot
+
+    q.enqueue({ priority: 10, run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+    q.enqueue({ priority: 0, run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+    q.enqueue({ priority: 7, run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+
+    expect(q.getTasks().map(t => t.priority)).toEqual([10, 7, 0])
+    q.destroy()
+  })
+})
+// ─── cancel keeps survivors ───────────────────────────────────────────────────
+
+describe('stateQueue.cancel keeps survivors', () => {
+  test('non-matching tasks stay queued when others are cancelled', () => {
+    const q = stateQueue()
+    q.enqueue({ id: 'keep', run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+    q.enqueue({ id: 'drop', run: jest.fn().mockResolvedValue(null) }, TaskRunType.MANUAL)
+
+    q.cancel('drop')
+
+    expect(q.getTasks().map(t => t.id)).toEqual(['keep'])
+    q.destroy()
+  })
+})
